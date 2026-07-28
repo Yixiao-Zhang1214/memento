@@ -147,13 +147,14 @@ Expect:
 Input:
 
 - First question used `scene_probe`.
-- User chooses “换个角度”.
+- User chooses “换一个问题”.
 
 Expect:
 
 - Replace with a different intent.
 - Mark question state `replaced: true`.
 - Do not offer another replacement after this one.
+- Return only the `就这样收藏` action after replacement.
 
 ## 12. Curator-note mismatch
 

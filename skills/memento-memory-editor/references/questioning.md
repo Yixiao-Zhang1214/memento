@@ -117,12 +117,20 @@ Ask only a non-rejected candidate scoring at least 6/8.
 
 ## Handle user actions
 
-- `多留一点`: absorb the answer and compose; do not ask another question.
-- `换个角度`: choose a different intent, mark `replaced: true`, and replace
+- Text or voice answer: absorb the answer and compose; do not ask another
+  question. Do not expose an answer button.
+- `换一个问题`: choose a different intent, mark `replaced: true`, and replace
   the active question once.
 - `就这样收藏`: close the budget and compose from current evidence.
 - Free addition: absorb it as E1 and compose unless the user explicitly asks
   only for editing.
+
+Return action objects with stable IDs:
+
+- `replace_question` with label `换一个问题`;
+- `compose_now` with label `就这样收藏`.
+
+After the one allowed replacement, return only `compose_now`.
 
 ## Validate the question
 

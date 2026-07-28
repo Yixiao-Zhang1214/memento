@@ -112,10 +112,23 @@ Allowed tone values:
   "tone_profile": {},
   "question_intent": "scene_probe",
   "question": "如果只补一个画面，你最先想到它出现在哪里？",
-  "user_options": ["多留一点", "换个角度", "就这样收藏"],
+  "user_actions": [
+    {
+      "id": "replace_question",
+      "label": "换一个问题"
+    },
+    {
+      "id": "compose_now",
+      "label": "就这样收藏"
+    }
+  ],
   "decision_code": "ONE_HIGH_VALUE_GAP"
 }
 ```
+
+Do not return an answer button. The user answers through text or voice input.
+Before a replacement, return both actions. After the one allowed replacement,
+omit `replace_question` and return only `compose_now`.
 
 When no question is warranted, set `status` to `complete`,
 `needs_followup` to `false`, `question` to `null`, and use one of:

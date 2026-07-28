@@ -140,9 +140,34 @@ def validate_question(data: dict[str, Any], errors: list[str]) -> None:
             errors.append("question: exceeds 80 characters")
     if data.get("question_intent") not in QUESTION_INTENTS:
         errors.append(f"question_intent: invalid value {data.get('question_intent')!r}")
-    options = data.get("user_options")
-    if not isinstance(options, list) or len(options) != 3:
-        errors.append("user_options: expected exactly three options")
+    actions = data.get("user_actions")
+    if not isinstance(actions, list) or not 1 <= len(actions) <= 2:
+        errors.append("user_actions: expected one or two actions")
+        return
+    expected_labels = {
+        "replace_question": "换一个问题",
+        "compose_now": "就这样收藏",
+    }
+    seen: set[str] = set()
+    for index, action in enumerate(actions):
+        if not isinstance(action, dict):
+            errors.append(f"user_actions[{index}]: expected object")
+            continue
+        action_id = action.get("id")
+        label = action.get("label")
+        if action_id not in expected_labels:
+            errors.append(f"user_actions[{index}].id: invalid value {action_id!r}")
+            continue
+        if action_id in seen:
+            errors.append(f"user_actions[{index}].id: duplicate {action_id!r}")
+        seen.add(action_id)
+        if label != expected_labels[action_id]:
+            errors.append(
+                f"user_actions[{index}].label: expected "
+                f"{expected_labels[action_id]!r}"
+            )
+    if "compose_now" not in seen:
+        errors.append("user_actions: must include compose_now")
 
 
 def validate_compose(
