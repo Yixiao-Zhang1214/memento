@@ -33,11 +33,26 @@ QUESTION_INTENTS = {
     "future_probe",
     "choice_probe",
 }
+CURATOR_ROUTES = {
+    "tender_daily",
+    "first_heartbeat",
+    "intimate_tension",
+    "family_old_days",
+    "friendship_complicity",
+    "bright_delight",
+    "absurd_self_mockery",
+    "nostalgia_change",
+    "regret_parting",
+    "grief_loss",
+    "endurance_afterward",
+    "neutral_sparse",
+}
 TONE_ENUMS = {
     "expression_mode": {"terse", "fragmented", "narrative", "playful", "literary"},
     "emotional_temperature": {"light", "neutral", "tender", "heavy", "guarded"},
     "openness": {"open", "unsure", "closing"},
     "preferred_question_tone": {"casual", "concrete", "gentle", "restrained"},
+    "curator_emotion_route": CURATOR_ROUTES,
 }
 SENTENCE_END_RE = re.compile(r"[。！？!?]+")
 
@@ -198,6 +213,37 @@ def validate_compose(
         segments = [part for part in SENTENCE_END_RE.split(note) if part.strip()]
         if len(segments) > 1:
             errors.append("curator_note: must be one sentence")
+    curator_profile = data.get("curator_profile")
+    if not isinstance(curator_profile, dict):
+        errors.append("curator_profile: expected object")
+    else:
+        route = curator_profile.get("emotion_route")
+        if route not in CURATOR_ROUTES:
+            errors.append(f"curator_profile.emotion_route: invalid value {route!r}")
+        lens_id = curator_profile.get("lens_id")
+        if not isinstance(lens_id, str) or not lens_id.strip():
+            errors.append("curator_profile.lens_id: expected non-empty string")
+        for private_field in (
+            "reference_person",
+            "author",
+            "inspired_by",
+            "style_imitation",
+        ):
+            if private_field in curator_profile:
+                errors.append(
+                    f"curator_profile.{private_field}: private routing metadata "
+                    "must not be exposed"
+                )
+        tone = data.get("tone_profile")
+        if (
+            isinstance(tone, dict)
+            and route in CURATOR_ROUTES
+            and tone.get("curator_emotion_route") != route
+        ):
+            errors.append(
+                "curator_profile.emotion_route: must match "
+                "tone_profile.curator_emotion_route"
+            )
     validate_bindings(data, ids, errors)
 
 

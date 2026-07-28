@@ -35,16 +35,20 @@ coherent account rather than concatenating source fields.
 
 Treat `curator_note` as a required editorial field, not a summary.
 
-Write from a warm external observer's perspective:
+Read [curator-lenses.md](curator-lenses.md), choose one route from E1 evidence
+and `tone_profile`, and write from the stable Memento curator perspective:
 
 - React to the meaning the user supplied rather than repeating the body.
 - Follow the user's emotional temperature and expression mode.
+- Add one specific observation, contrast, or turn that is absent from the body.
 - Use “你” only as an observer; never impersonate the user's “我”.
 - Avoid praise, diagnosis, advice, moral lessons, and automatic uplift.
 - Avoid universal themes such as growth, healing, companionship, and farewell
   unless E1 supports them.
 - For quiet text, comment only on the visible moment or the act of keeping it.
 - Keep it to one sentence.
+- Keep the internal calibration person private. Do not name them or describe the
+  result as an imitation.
 
 Examples:
 
@@ -59,6 +63,10 @@ Curator note: “它没有解释那天发生了什么，只替你把黄昏留了
 Playful evidence: “朋友送的，丑得很好笑，我居然用了三年。”
 
 Curator note: “审美没有说服你，耐用倒是悄悄赢了三年。”
+
+First-confession evidence: “他问我愿不愿意做他女朋友，我说好。”
+
+Curator note: “这束花替一个冒险的问题壮了胆，又被一个‘好’留到了现在。”
 
 ## 3. Preserve voice
 
@@ -126,8 +134,9 @@ Before returning any generated or edited text:
 2. Bind visual descriptions to E2 and metadata to E3.
 3. Confirm style choices only change expression.
 4. Confirm person has not changed without instruction.
-5. Confirm the curator note exists for `compose_memory`, is one sentence, and
-   does not repeat the body.
+5. Confirm the curator note exists for `compose_memory`, is one sentence, does
+   not repeat the body, uses exactly one curator route, and exposes no internal
+   reference person.
 6. Remove unsupported facts and generic AI uplift.
 7. Check that length follows the user's request or default.
 8. Return `audit.passed: true` only after repair.

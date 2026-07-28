@@ -87,7 +87,8 @@ Tone profile:
   "expression_mode": "terse",
   "emotional_temperature": "neutral",
   "openness": "unsure",
-  "preferred_question_tone": "concrete"
+  "preferred_question_tone": "concrete",
+  "curator_emotion_route": "neutral_sparse"
 }
 ```
 
@@ -97,6 +98,10 @@ Allowed tone values:
 - `emotional_temperature`: `light`, `neutral`, `tender`, `heavy`, `guarded`
 - `openness`: `open`, `unsure`, `closing`
 - `preferred_question_tone`: `casual`, `concrete`, `gentle`, `restrained`
+- `curator_emotion_route`: `tender_daily`, `first_heartbeat`,
+  `intimate_tension`, `family_old_days`, `friendship_complicity`,
+  `bright_delight`, `absurd_self_mockery`, `nostalgia_change`,
+  `regret_parting`, `grief_loss`, `endurance_afterward`, `neutral_sparse`
 
 ## 4. Outputs
 
@@ -130,10 +135,13 @@ Do not return an answer button. The user answers through text or voice input.
 Before a replacement, return both actions. After the one allowed replacement,
 omit `replace_question` and return only `compose_now`.
 
-When no question is warranted, set `status` to `complete`,
-`needs_followup` to `false`, `question` to `null`, and use one of:
+For a fresh memory that has not opted out, a follow-up is required even when
+the evidence is already sufficient. Use decision code
+`MANDATORY_OPTIONAL_QUESTION`.
 
-- `ENOUGH_EVIDENCE`
+When the user has already answered or explicitly skipped, set `status` to
+`complete`, `needs_followup` to `false`, `question` to `null`, and use one of:
+
 - `USER_SKIPPED`
 - `BOUNDARY_CLOSING`
 - `NO_SAFE_HIGH_VALUE_QUESTION`
@@ -153,6 +161,10 @@ When no question is warranted, set `status` to `complete`,
   "summary": "",
   "story_text": "",
   "curator_note": "",
+  "curator_profile": {
+    "emotion_route": "neutral_sparse",
+    "lens_id": "object_first_observation"
+  },
   "evidence_bindings": {
     "title": [],
     "summary": [],
@@ -166,6 +178,10 @@ When no question is warranted, set `status` to `complete`,
   }
 }
 ```
+
+`curator_profile` is public-safe metadata. Never include a reference person's
+name or fields such as `reference_person`, `author`, `inspired_by`, or
+`style_imitation`.
 
 ### Polish
 

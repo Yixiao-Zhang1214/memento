@@ -1,25 +1,32 @@
 ---
 name: memento-memory-editor
-description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text through tone-aware optional questioning, memory drafting, curator notes, polishing, expansion, rewriting, and evidence auditing. Use when asked to ask one fitting follow-up, compose or edit Memento memory text, preserve a user's voice, create a curator comment, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
+description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text through one required-but-skippable tone-aware follow-up, selectable body styles, distinctive system-routed curator notes, polishing, expansion, rewriting, and evidence auditing. Use when asked to ask one fitting follow-up, compose or edit Memento memory text, preserve a user's voice, create a curator comment, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
 ---
 
 # Memento Memory Editor
 
 Create restrained, concrete, evidence-bound personal memory text. Notice how the
-user is speaking before deciding whether and how to ask one optional question.
-Always produce a one-sentence curator note when composing a memory.
+user is speaking before choosing one optional-to-answer follow-up. Always produce
+a one-sentence curator note with a recognizable Memento point of view when
+composing a memory.
 
 ## Non-negotiable rules
 
 1. Preserve facts, relationships, person, and valuable colloquial phrasing.
 2. Treat silence as a valid input. Write less instead of inventing more.
-3. Ask at most one system-initiated follow-up. Make it optional.
+3. For every new memory, display exactly one system-initiated follow-up before
+   first composition unless the user has already explicitly skipped or closed
+   questioning. Make answering optional.
 4. Match the current input's emotional temperature without inferring a stable
    personality or sensitive identity.
 5. Bind events, relationships, meanings, and emotional conclusions to user
    evidence.
 6. Keep the curator note external to the user's voice and evidence-bound.
-7. Never perform card rendering, visual layout, image export, or storage work.
+7. Route the curator note through one internal reference lens selected from the
+   evidence and tone. Learn only high-level craft traits. Never expose the
+   reference person's name or claim imitation.
+8. Keep body-style selection independent from the system-selected curator lens.
+9. Never perform card rendering, visual layout, image export, or storage work.
 
 ## Route the request
 
@@ -51,6 +58,8 @@ Then read only the resources required by the selected mode:
 - For `compose_memory`, `polish_text`, `expand_text`, `optimization_options`,
   or `rewrite_text`, read
   [references/writing-and-editing.md](references/writing-and-editing.md).
+- For `compose_memory`, always read
+  [references/curator-lenses.md](references/curator-lenses.md).
 - For a non-default style or a user-provided style reference, also read
   [references/styles.md](references/styles.md).
 - When testing or diagnosing the skill, read
@@ -73,18 +82,25 @@ signals before considering information density.
 
 ### 3. Apply the global question budget
 
-Ask only when one answer would materially improve truthful writing. Stop when
-the user answers, skips, says they are done, or has already supplied enough
-evidence. Allow one user-requested replacement before an answer; do not treat
-that as permission for a multi-round interview.
+On a fresh memory, select and display one useful question even when the supplied
+facts are already sufficient to draft. The question may deepen a scene, reveal
+an aftertrace, or preserve the user's own wording; it must not repeat known
+information. Do not display a question only when the user has explicitly
+skipped, closed questioning, or already answered the current question. Allow one
+user-requested replacement before an answer; do not treat that as permission for
+a multi-round interview.
 
 ### 4. Perform the selected operation
 
 - Generate `story` text only when E1 supports personal context or meaning.
 - Generate `quiet` text when only visible or metadata evidence is available.
 - Keep editing modes within existing evidence.
+- Apply the user-selected body style to `story_text`. Select the curator lens
+  independently from the emotional route and evidence.
 - Translate author or work references into general style characteristics; do
   not imitate signature phrasing.
+- Keep all internal curator reference people private. Do not place their names
+  in questions, options, prose, notes, metadata, or explanations to the user.
 
 ### 5. Audit before returning
 

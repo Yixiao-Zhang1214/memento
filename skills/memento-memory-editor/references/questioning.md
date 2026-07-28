@@ -2,27 +2,32 @@
 
 ## Global question budget
 
-- Ask at most one system-initiated question.
+- For each fresh memory, display exactly one system-initiated question before
+  first composition.
+- The user never has to answer it.
 - Allow one user-requested replacement before the user answers.
 - Treat replacement as changing the active question, not starting an interview.
 - Close the budget after an answer, a skip, “就这样收藏”, or any boundary signal.
 - After closure, shorten the output or describe the missing evidence. Never ask
   again from an editing mode.
 
-## Decide whether to ask
+## Decide what to ask
 
 Use this order:
 
 1. If `user_skipped` is true, return `USER_SKIPPED`.
 2. If the question state is closed or answered, return
    `QUESTION_BUDGET_CLOSED`.
-3. If tone openness is `closing`, return `BOUNDARY_CLOSING`.
-4. If E1 already supports identity/context and personal significance, return
-   `ENOUGH_EVIDENCE`.
-5. Generate up to three candidate questions for the single most useful gap.
-6. Reject leading, repetitive, private, double, or low-value candidates.
-7. Ask only if one candidate remains clearly useful; otherwise return
-   `NO_SAFE_HIGH_VALUE_QUESTION`.
+3. If the user's input itself explicitly says “不想回答”, “不要问了”,
+   “就这样收藏”, or an equivalent opt-out, return `BOUNDARY_CLOSING`.
+4. Generate up to three candidate questions for the single most useful
+   remaining gap, even when existing evidence is sufficient to draft.
+5. Reject leading, repetitive, private, double, or low-value candidates.
+6. Ask the highest-scoring safe candidate. If a deep question would be
+   invasive, fall back to a concrete or choice probe rather than skipping the
+   question.
+7. Use `NO_SAFE_HIGH_VALUE_QUESTION` only when every possible question would
+   violate evidence, privacy, or safety constraints.
 
 ## Question intents
 
@@ -105,15 +110,17 @@ Apply a blocking rejection for:
 - contradiction with user correction;
 - assumption that a perishable item still exists.
 
-Ask only a non-rejected candidate scoring at least 6/8.
+Prefer a non-rejected candidate scoring at least 6/8. If none reaches 6, ask the
+best safe concrete or choice probe scoring at least 4/8. Do not ask merely to
+collect trivia.
 
 ## Follow the tone
 
 - `casual`: use natural spoken Chinese; allow light humor already present.
 - `concrete`: ask for one visible or remembered detail.
 - `gentle`: use a soft but direct sentence; avoid therapeutic language.
-- `restrained`: prefer no question; if necessary, ask for one non-invasive
-  detail and explicitly allow silence.
+- `restrained`: ask one non-invasive, concrete question and make the skip action
+  especially easy to see.
 
 ## Handle user actions
 

@@ -1,4 +1,4 @@
 interface:
   display_name: "Memento Memory Editor"
-  short_description: "察言观色地追问、生成、润色并审计可信的 Memento 纪念文本"
-  default_prompt: "Use $memento-memory-editor to turn this photo description or personal memory into truthful Memento text with one optional follow-up and a curator note."
+  short_description: "先做一次可跳过追问，再生成正文与鲜明的系统馆员评语"
+  default_prompt: "Use $memento-memory-editor to ask one skippable tone-aware follow-up, then turn this photo description or personal memory into truthful Memento text with a distinctive system-routed curator note."

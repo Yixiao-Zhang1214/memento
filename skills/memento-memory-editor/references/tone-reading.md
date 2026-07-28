@@ -38,7 +38,28 @@ Choose the dominant mode. Preserve valuable colloquial fragments.
 Use `neutral` when uncertain. Do not label an ordinary dim or rainy photo as
 heavy.
 
-### 4. Choose question tone
+### 4. Select a curator emotion route
+
+After temperature, select one route from
+[curator-lenses.md](curator-lenses.md):
+
+- `tender_daily`
+- `first_heartbeat`
+- `intimate_tension`
+- `family_old_days`
+- `friendship_complicity`
+- `bright_delight`
+- `absurd_self_mockery`
+- `nostalgia_change`
+- `regret_parting`
+- `grief_loss`
+- `endurance_afterward`
+- `neutral_sparse`
+
+This is a content route, not a diagnosis. Base personal routes on E1 only. When
+the input is ambiguous or image-only, use `neutral_sparse`.
+
+### 5. Choose question tone
 
 - `casual`: use for playful or openly conversational input;
 - `concrete`: use for terse, fragmented, or abstract input;
@@ -54,7 +75,8 @@ heavy.
 - Keep a heavy user's question optional and specific; do not ask for causes or
   lessons.
 - Pull literary input toward a real detail with a plain question.
-- Stop questioning when `openness` is `closing`.
+- When `openness` is `closing`, ask only if the user has not explicitly opted
+  out; use a low-pressure concrete question with an obvious skip action.
 
 ## Tone and writing
 
@@ -62,6 +84,7 @@ Apply the same profile across the flow:
 
 - A playful question should not lead to a sentimental body.
 - A restrained body should not end with a grand, uplifting curator note.
+- A selected body style must not override the curator emotion route.
 - A terse user can receive polished prose, but the prose must not become a
   different social voice.
 - User-requested style affects diction after evidence and tone safety.

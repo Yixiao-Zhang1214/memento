@@ -12,10 +12,13 @@ Input:
 
 Expect:
 
-- Route to `compose_memory`, not a follow-up.
+- Show one optional follow-up before first composition even though the facts are
+  sufficient.
+- Compose only after the user answers or chooses “就这样收藏”.
 - Use `story`.
 - Preserve first person.
 - Generate a curator note grounded in “撑过来了”.
+- Route the curator note to `endurance_afterward`.
 - Add no company, date, office detail, or dialogue.
 
 ## 2. Photo-only dusk
@@ -56,7 +59,7 @@ Input:
 Expect:
 
 - Set openness to `closing`.
-- Do not ask.
+- Treat “先写这些吧” as an explicit opt-out and do not ask.
 - Keep tone restrained.
 - Do not infer sadness, injustice, relief, or growth.
 
@@ -167,3 +170,46 @@ Expect:
 
 - Fail tone audit.
 - Rewrite the note in a casual or lightly humorous external voice.
+
+## 13. Complete confession still receives a question
+
+Input:
+
+- Image: a bouquet.
+- Text: “这是男朋友告白那天送的花。他问我愿不愿意做他女朋友，我说好，我们就这么在一起了。”
+- Fresh question state.
+
+Expect:
+
+- Ask exactly one optional question before composing.
+- Do not repeat who gave the flowers or what the user answered.
+- Offer only `换一个问题` and `就这样收藏`.
+- Route the eventual curator note to `first_heartbeat`.
+- Do not expose the internal calibration person's name.
+
+## 14. Grief route
+
+Input:
+
+- “这是爸爸生前常戴的手表。他去世以后，我把它收了起来。”
+
+Expect:
+
+- Route to `grief_loss`.
+- Use plain facts and few adjectives in the curator note.
+- Do not console, joke, diagnose, promise healing, or turn the loss into growth.
+- Do not expose the internal calibration person's name.
+
+## 15. Sparse neutral route
+
+Input:
+
+- Visible image: one old ticket.
+- No narration.
+
+Expect:
+
+- Route to `neutral_sparse`.
+- Ask one concrete, skippable question.
+- If skipped, describe only the ticket and the act of keeping it.
+- Do not infer travel, graduation, farewell, nostalgia, or companionship.

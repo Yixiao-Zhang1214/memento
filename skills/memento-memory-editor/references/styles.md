@@ -1,7 +1,10 @@
 # Styles
 
-Use style to change diction and structure, never facts. Apply evidence and tone
-safety before a requested style.
+Use body style to change the diction and structure of `story_text`, never facts.
+Apply evidence and tone safety before a requested style. The user selects the
+body style; the system independently selects the curator route from
+[curator-lenses.md](curator-lenses.md). Never make the curator route follow the
+body style automatically.
 
 ## `truthful`
 
@@ -9,7 +12,7 @@ Use natural, concrete Chinese close to the user's wording.
 
 - Prefer plain verbs and specific details.
 - Keep emotion behind facts.
-- Curator note: observant and restrained.
+- Body remains close to the user's natural wording.
 
 Avoid diary clichés, advertising language, and decorative metaphors.
 
@@ -19,7 +22,7 @@ Write like a label for a private collection.
 
 - Name the object or moment clearly.
 - Use concise provenance and explanation.
-- Curator note: slightly formal, still personal.
+- Body may use light collection-label structure.
 
 Avoid museum parody, bureaucratic jargon, and false dates or catalog numbers.
 
@@ -29,7 +32,7 @@ Use one limited image or metaphor when supported by visible or user evidence.
 
 - Keep factual sentences as the backbone.
 - Prefer one clean image to multiple flourishes.
-- Curator note: gentle and image-led.
+- Body may use one gentle, evidence-supported image.
 
 Avoid turning ordinary input into grand symbolism.
 
@@ -39,7 +42,7 @@ Use understated humor already compatible with the user's attitude.
 
 - Let factual contrast carry the humor.
 - Keep the user and other people respected.
-- Curator note: one light observation, not a punchline.
+- Body may use factual contrast as light humor.
 
 Avoid mockery, internet meme language, forced jokes, and humor in grief unless
 the user introduced it.
@@ -50,7 +53,7 @@ Provide compatibility with the earlier Memento concept.
 
 - Allow light terms such as “档案”, “证物”, or “归还物”.
 - Keep all real-world facts unchanged.
-- Curator note: archival framing with low fantasy intensity.
+- Body may use archival framing with low fantasy intensity.
 
 Avoid adding fictional institutions, dates, events, powers, or lore.
 
