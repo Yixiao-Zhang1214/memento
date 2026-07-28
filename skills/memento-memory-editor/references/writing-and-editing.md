@@ -3,19 +3,33 @@
 ## Contents
 
 1. Compose a memory
-2. Write the curator note
-3. Preserve voice
-4. Edit existing text
-5. Audit prose
+2. Write the source line
+3. Write the curator note
+4. Preserve voice
+5. Adjust style after drafting
+6. Edit existing text
+7. Audit prose
 
 ## 1. Compose a memory
 
 Choose `story` only when E1 supports personal context, an event, a relationship,
 or significance. Otherwise choose `quiet`.
 
+Always generate the first integrated result with `default_polish` before asking
+about style:
+
+- merge raw text, transcript text, and the follow-up answer;
+- order supplied facts into a coherent sequence;
+- remove repetition, filler, and transcription noise;
+- add only necessary transitions;
+- preserve valuable spoken wording, dialogue, person, and emotional
+  temperature;
+- do not introduce the diction or structure of a preset style.
+
 ### Story text
 
 - Title: default 4-18 Chinese characters.
+- Source line: default 4-18 Chinese characters.
 - Summary: default 12-36 Chinese characters.
 - Body: default 120-260 Chinese characters.
 - Curator note: default 20-45 Chinese characters and one sentence.
@@ -31,7 +45,35 @@ coherent account rather than concatenating source fields.
 - Do not use first-person experience, relationship, or emotional conclusions.
 - Still write a one-sentence curator note with low interpretive intensity.
 
-## 2. Write the curator note
+## 2. Write the source line
+
+Treat `source_line` as a required field outside `story_text`.
+
+- Prefer time + person + event when E1/E3 support all three.
+- When time is missing, retain an E1-supported person before a key line, action,
+  or event.
+- When no person is supported, use the object or event without inferring a
+  relationship.
+- Keep it fragment-like and lightly artistic; avoid a full explanatory
+  sentence.
+- Bind every personal or temporal element to E1/E3.
+- Do not let post-draft body style change it unless the user explicitly asks to
+  edit the source line.
+
+Examples:
+
+- `2024年春，他的告白`
+- `他的一句“愿不愿意”`
+- `第一份工作，那些夜晚`
+- `镜头里的一束花`
+
+Avoid:
+
+- `男朋友在告白那天送给我的一束花`
+- `一段珍贵而浪漫的爱情回忆`
+- any date, season, person, or relationship absent from evidence.
+
+## 3. Write the curator note
 
 Treat `curator_note` as a required editorial field, not a summary.
 
@@ -68,7 +110,7 @@ First-confession evidence: “他问我愿不愿意做他女朋友，我说好�
 
 Curator note: “这束花替一个冒险的问题壮了胆，又被一个‘好’留到了现在。”
 
-## 3. Preserve voice
+## 4. Preserve voice
 
 - Preserve first, second, or third person from the source.
 - Do not change a young, fragmented, or colloquial voice into a formal memoir.
@@ -84,9 +126,29 @@ Apply this priority:
 1. Evidence and factual boundaries
 2. Explicit user editing request
 3. Current tone profile
-4. Selected default style
+4. `default_polish` for the first draft
+5. Selected post-draft style
 
-## 4. Edit existing text
+## 5. Adjust style after drafting
+
+Do not ask the user to choose a body style before the integrated draft exists.
+After the base draft, return:
+
+- `keep_draft` with label `就这样收藏`;
+- `adjust_style` with label `调整风格`;
+- `custom_style` with label `自定义风格`.
+
+For `adjust_style`, present the five presets in
+[styles.md](styles.md). For `custom_style`, accept a natural-language request
+about voice, length, structure, polish, or a creator reference. Convert the
+request into `style_features` and rewrite only `story_text`.
+
+Do not reopen the factual question budget. Preserve title, `source_line`,
+summary, evidence, and curator route unless the user explicitly asks to edit
+those fields. Re-audit the curator note after a body rewrite and change it only
+when it has become repetitive or mismatched.
+
+## 6. Edit existing text
 
 ### `polish_text`
 
@@ -126,17 +188,19 @@ Apply this priority:
 - If the request requires unknown facts, narrow the rewrite or use the one
   remaining follow-up.
 
-## 5. Audit prose
+## 7. Audit prose
 
 Before returning any generated or edited text:
 
 1. List personal claims and bind them to E1.
 2. Bind visual descriptions to E2 and metadata to E3.
-3. Confirm style choices only change expression.
-4. Confirm person has not changed without instruction.
-5. Confirm the curator note exists for `compose_memory`, is one sentence, does
+3. Confirm `source_line` is evidence-bound, short, and person-aware when E1
+   contains a relevant person.
+4. Confirm style choices occur after the base draft and only change expression.
+5. Confirm person has not changed without instruction.
+6. Confirm the curator note exists for `compose_memory`, is one sentence, does
    not repeat the body, uses exactly one curator route, and exposes no internal
    reference person.
-6. Remove unsupported facts and generic AI uplift.
-7. Check that length follows the user's request or default.
-8. Return `audit.passed: true` only after repair.
+7. Remove unsupported facts and generic AI uplift.
+8. Check that length follows the user's request or default.
+9. Return `audit.passed: true` only after repair.

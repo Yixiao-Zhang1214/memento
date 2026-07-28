@@ -20,16 +20,32 @@ Use this order:
    `QUESTION_BUDGET_CLOSED`.
 3. If the user's input itself explicitly says “不想回答”, “不要问了”,
    “就这样收藏”, or an equivalent opt-out, return `BOUNDARY_CLOSING`.
-4. Generate up to three candidate questions for the single most useful
-   remaining gap, even when existing evidence is sufficient to draft.
-5. Reject leading, repetitive, private, double, or low-value candidates.
-6. Ask the highest-scoring safe candidate. If a deep question would be
+4. If E1 describes one identifiable event, E1/E3 contain no time, and a time
+   coordinate would improve provenance, prefer `time_probe`.
+5. Otherwise generate up to three candidate questions for the single most
+   useful remaining gap, even when existing evidence is sufficient to draft.
+6. Reject leading, repetitive, private, double, or low-value candidates.
+7. Ask the highest-scoring safe candidate. If a deep question would be
    invasive, fall back to a concrete or choice probe rather than skipping the
    question.
-7. Use `NO_SAFE_HIGH_VALUE_QUESTION` only when every possible question would
+8. Use `NO_SAFE_HIGH_VALUE_QUESTION` only when every possible question would
    violate evidence, privacy, or safety constraints.
 
 ## Question intents
+
+### `time_probe`
+
+Use when the memory centers on one identifiable event and no time is available
+from E1 or E3. Prefer it for confessions, graduations, resignations, first
+meetings, birthdays, trips, and one-time gifts when time improves the memory's
+provenance.
+
+Example: “你还记得这大概是什么时候吗？”
+
+Accept an exact date, year/month, season, relative period, or life stage such as
+“去年春天”, “大学时”, or “刚工作那年”. Accept “记不清” without asking again.
+Do not require exact dates, and do not ask when reliable time metadata already
+exists or when the memory spans a long period.
 
 ### `scene_probe`
 
@@ -100,6 +116,9 @@ Score each candidate from 0-2:
 - fit with current tone;
 - value to the final text.
 
+For `time_probe`, count support for `source_line`, title, or chronology as
+writing value. Do not reward time questions that would only collect trivia.
+
 Apply a blocking rejection for:
 
 - leading emotion or relationship;
@@ -124,13 +143,15 @@ collect trivia.
 
 ## Handle user actions
 
-- Text or voice answer: absorb the answer and compose; do not ask another
-  question. Do not expose an answer button.
+- Text or voice answer: absorb the answer and generate the default-polished
+  integrated draft; do not ask another factual question. Do not expose an
+  answer button.
 - `换一个问题`: choose a different intent, mark `replaced: true`, and replace
   the active question once.
-- `就这样收藏`: close the budget and compose from current evidence.
-- Free addition: absorb it as E1 and compose unless the user explicitly asks
-  only for editing.
+- `就这样收藏`: close the budget and generate the default-polished draft from
+  current evidence.
+- Free addition: absorb it as E1 and generate the default-polished draft unless
+  the user explicitly asks only for editing.
 
 Return action objects with stable IDs:
 

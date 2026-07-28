@@ -1,6 +1,6 @@
 ---
 name: memento-memory-editor
-description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text through one required-but-skippable tone-aware follow-up, selectable body styles, distinctive system-routed curator notes, polishing, expansion, rewriting, and evidence auditing. Use when asked to ask one fitting follow-up, compose or edit Memento memory text, preserve a user's voice, create a curator comment, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
+description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text through one required-but-skippable tone-aware follow-up, a default-polished integrated draft, a short artistic source line, distinctive system-routed curator notes, and post-draft preset or custom style adjustment. Use when asked to ask one fitting follow-up, compose or edit Memento memory text, preserve a user's voice, create a curator comment, customize prose style, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
 ---
 
 # Memento Memory Editor
@@ -25,8 +25,11 @@ composing a memory.
 7. Route the curator note through one internal reference lens selected from the
    evidence and tone. Learn only high-level craft traits. Never expose the
    reference person's name or claim imitation.
-8. Keep body-style selection independent from the system-selected curator lens.
-9. Never perform card rendering, visual layout, image export, or storage work.
+8. Generate a default-polished integrated draft before asking about body style.
+9. Keep `source_line` short, evidence-bound, and person-aware.
+10. Keep post-draft body style independent from `source_line` and the
+    system-selected curator lens.
+11. Never perform card rendering, visual layout, image export, or storage work.
 
 ## Route the request
 
@@ -60,7 +63,7 @@ Then read only the resources required by the selected mode:
   [references/writing-and-editing.md](references/writing-and-editing.md).
 - For `compose_memory`, always read
   [references/curator-lenses.md](references/curator-lenses.md).
-- For a non-default style or a user-provided style reference, also read
+- For post-draft preset or custom style adjustment, also read
   [references/styles.md](references/styles.md).
 - When testing or diagnosing the skill, read
   [references/test-cases.md](references/test-cases.md).
@@ -83,33 +86,48 @@ signals before considering information density.
 ### 3. Apply the global question budget
 
 On a fresh memory, select and display one useful question even when the supplied
-facts are already sufficient to draft. The question may deepen a scene, reveal
-an aftertrace, or preserve the user's own wording; it must not repeat known
-information. Do not display a question only when the user has explicitly
-skipped, closed questioning, or already answered the current question. Allow one
-user-requested replacement before an answer; do not treat that as permission for
-a multi-round interview.
+facts are already sufficient to draft. When E1 describes one identifiable event
+and E1/E3 contain no time, prefer `time_probe` if time would improve the memory's
+provenance. Accept exact or approximate time. Do not repeat known information.
+Do not display a question only when the user has explicitly skipped, closed
+questioning, or already answered the current question. Allow one user-requested
+replacement before an answer; do not treat that as permission for a multi-round
+interview.
 
-### 4. Perform the selected operation
+### 4. Generate the base draft
 
 - Generate `story` text only when E1 supports personal context or meaning.
 - Generate `quiet` text when only visible or metadata evidence is available.
 - Keep editing modes within existing evidence.
-- Apply the user-selected body style to `story_text`. Select the curator lens
-  independently from the emotional route and evidence.
+- Merge all user inputs and the follow-up answer into one `default_polish`
+  draft. Reorder, deduplicate, and smooth transitions without adding facts.
+- Generate `source_line` separately. Prefer time + person + event; when time is
+  missing, preserve an E1-supported person before the key line or action. Never
+  infer a person or relationship.
+- Return `就这样收藏`, `调整风格`, and `自定义风格` after the draft. Do not ask
+  for style before the user has seen the integrated draft.
+- Select the curator lens independently from the emotional route and evidence.
+
+### 5. Adjust style only after the draft
+
+- Apply preset and custom styles only to `story_text`.
+- Accept a natural-language custom style request and extract safe
+  `style_features`, length, and structure constraints.
 - Translate author or work references into general style characteristics; do
   not imitate signature phrasing.
+- Do not change `source_line` or the curator route unless the user explicitly
+  asks to edit the source line or provides new evidence.
 - Keep all internal curator reference people private. Do not place their names
   in questions, options, prose, notes, metadata, or explanations to the user.
 
-### 5. Audit before returning
+### 6. Audit before returning
 
 Check evidence support, person, tone, curator-note requirements, length, and
 schema. Rewrite unsupported claims rather than merely warning about them. When
 the request is impossible without missing input, return a recoverable structured
 error.
 
-### 6. Return the contract
+### 7. Return the contract
 
 Return valid JSON when the caller requests structured output or supplies a mode.
 For natural conversation, present only the user-facing question or edited text

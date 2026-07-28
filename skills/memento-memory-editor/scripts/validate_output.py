@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 
-CONTRACT_VERSION = "1.0"
+CONTRACT_VERSION = "1.1"
 MODES = {
     "ask_followup",
     "compose_memory",
@@ -24,6 +24,7 @@ MODES = {
 STATUSES = {"needs_user_input", "complete", "blocked"}
 TEXT_TYPES = {"story", "quiet"}
 QUESTION_INTENTS = {
+    "time_probe",
     "scene_probe",
     "sensory_probe",
     "moment_probe",
@@ -32,6 +33,13 @@ QUESTION_INTENTS = {
     "significance_probe",
     "future_probe",
     "choice_probe",
+}
+DRAFT_STAGES = {"base_polished", "restyled"}
+REVISION_STATES = {"awaiting_direction", "finalized"}
+POST_DRAFT_ACTIONS = {
+    "keep_draft": "就这样收藏",
+    "adjust_style": "调整风格",
+    "custom_style": "自定义风格",
 }
 CURATOR_ROUTES = {
     "tender_daily",
@@ -124,7 +132,7 @@ def validate_bindings(
     if not isinstance(bindings, dict):
         errors.append("evidence_bindings: expected object")
         return
-    for field in ("title", "summary", "story_text", "curator_note"):
+    for field in ("title", "source_line", "summary", "story_text", "curator_note"):
         values = bindings.get(field)
         if not isinstance(values, list):
             errors.append(f"evidence_bindings.{field}: expected array")
@@ -195,6 +203,7 @@ def validate_compose(
     validate_audit(data, errors)
     fields = {
         "title": (4, 18),
+        "source_line": (4, 18),
         "summary": (12, 36),
         "story_text": (30, 260),
         "curator_note": (8, 80),
@@ -244,7 +253,67 @@ def validate_compose(
                 "curator_profile.emotion_route: must match "
                 "tone_profile.curator_emotion_route"
             )
+    validate_draft_state(data, errors)
     validate_bindings(data, ids, errors)
+
+
+def validate_draft_state(data: dict[str, Any], errors: list[str]) -> None:
+    stage = data.get("draft_stage")
+    if stage not in DRAFT_STAGES:
+        errors.append(f"draft_stage: invalid value {stage!r}")
+
+    revision = data.get("revision_state")
+    if revision not in REVISION_STATES:
+        errors.append(f"revision_state: invalid value {revision!r}")
+
+    actions = data.get("post_draft_actions")
+    if not isinstance(actions, list):
+        errors.append("post_draft_actions: expected array")
+        return
+
+    if revision == "awaiting_direction":
+        if data.get("status") != "needs_user_input":
+            errors.append(
+                "status: must be needs_user_input while awaiting draft direction"
+            )
+        if len(actions) != 3:
+            errors.append(
+                "post_draft_actions: expected three actions while awaiting direction"
+            )
+    elif revision == "finalized":
+        if data.get("status") != "complete":
+            errors.append("status: must be complete when draft is finalized")
+        if actions:
+            errors.append("post_draft_actions: must be empty when draft is finalized")
+
+    seen: set[str] = set()
+    for index, action in enumerate(actions):
+        if not isinstance(action, dict):
+            errors.append(f"post_draft_actions[{index}]: expected object")
+            continue
+        action_id = action.get("id")
+        label = action.get("label")
+        if action_id not in POST_DRAFT_ACTIONS:
+            errors.append(
+                f"post_draft_actions[{index}].id: invalid value {action_id!r}"
+            )
+            continue
+        if action_id in seen:
+            errors.append(
+                f"post_draft_actions[{index}].id: duplicate {action_id!r}"
+            )
+        seen.add(action_id)
+        if label != POST_DRAFT_ACTIONS[action_id]:
+            errors.append(
+                f"post_draft_actions[{index}].label: expected "
+                f"{POST_DRAFT_ACTIONS[action_id]!r}"
+            )
+
+    if revision == "awaiting_direction" and seen != set(POST_DRAFT_ACTIONS):
+        errors.append(
+            "post_draft_actions: must include keep_draft, adjust_style, "
+            "and custom_style"
+        )
 
 
 def validate_edit_mode(data: dict[str, Any], mode: str, errors: list[str]) -> None:

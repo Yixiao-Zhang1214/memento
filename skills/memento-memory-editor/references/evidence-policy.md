@@ -8,16 +8,17 @@ Include user-written text, voice transcripts, follow-up answers, corrections,
 and explicit metadata statements.
 
 Allow E1 to support events, people, relationships, motives, emotions, personal
-meaning, and all output fields.
+meaning, `source_line`, and all other output fields.
 
 ### E2: visible evidence
 
 Include only directly visible objects, setting, color, light, physical state,
 and observable action.
 
-Allow E2 to support titles, visible descriptions, quiet text, and restrained
-curator notes. Do not use E2 alone to support identity, relationship, motive,
-emotion, history, ownership, or personal meaning.
+Allow E2 to support titles, object-first `source_line` values, visible
+descriptions, quiet text, and restrained curator notes. Do not use E2 alone to
+support identity, relationship, motive, emotion, history, ownership, or
+personal meaning.
 
 ### E3: authorized metadata
 
@@ -60,9 +61,10 @@ Before returning composed text:
 2. Bind each claim to evidence IDs.
 3. Delete or soften claims with no valid binding.
 4. For a `story`, require E1 for personal claims.
-5. For a `quiet` text, use only E2/E3 and the fact that the user chose to keep
+5. Bind every person and time fragment in `source_line` to E1/E3.
+6. For a `quiet` text, use only E2/E3 and the fact that the user chose to keep
    the moment.
-6. Bind the curator note under the same rules as the body.
+7. Bind the curator note under the same rules as the body.
 
 ## Forbidden inference
 

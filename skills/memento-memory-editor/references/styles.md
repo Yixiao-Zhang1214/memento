@@ -1,10 +1,20 @@
 # Styles
 
-Use body style to change the diction and structure of `story_text`, never facts.
-Apply evidence and tone safety before a requested style. The user selects the
-body style; the system independently selects the curator route from
-[curator-lenses.md](curator-lenses.md). Never make the curator route follow the
-body style automatically.
+Use body style only after the user has seen the `default_polish` integrated
+draft. Change the diction and structure of `story_text`, never facts. Do not
+change `source_line`. The system independently selects the curator route from
+[curator-lenses.md](curator-lenses.md); never make it follow body style.
+
+## Selection flow
+
+After the base draft, offer:
+
+- `就这样收藏`
+- `调整风格`
+- `自定义风格`
+
+Show the five presets below only after `调整风格`. Do not make style a
+pre-draft requirement.
 
 ## `truthful`
 
@@ -59,6 +69,9 @@ Avoid adding fictional institutions, dates, events, powers, or lore.
 
 ## User-supplied references
 
+Accept a free-form custom style request after the draft. It may specify voice,
+length, structure, polish level, a sample phrase, or a creator reference.
+
 When a user names an author, artist, publication, or work:
 
 1. Extract high-level features that the user appears to want.
@@ -66,6 +79,10 @@ When a user names an author, artist, publication, or work:
 3. Write an original result using those general features.
 4. Do not copy signature phrases, distinctive passages, or claim exact
    imitation.
+
+If the custom request is empty, return `EMPTY_CUSTOM_STYLE_REQUEST`. If it
+requires unknown facts, narrow the rewrite instead of reopening the factual
+question budget.
 
 Example conversion:
 

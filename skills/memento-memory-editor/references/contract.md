@@ -10,7 +10,7 @@
 
 ## 1. Version and modes
 
-Use contract version `1.0`.
+Use contract version `1.1`.
 
 Input modes:
 
@@ -35,7 +35,7 @@ Statuses:
 
 ```json
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "mode": "auto",
   "image_ref": null,
   "visual_evidence": [],
@@ -51,7 +51,13 @@ Statuses:
     "closed": false,
     "previous_intent": null
   },
-  "style": "truthful",
+  "style": null,
+  "draft_state": {
+    "base_draft_generated": false,
+    "revision_state": "not_started",
+    "selected_preset": null,
+    "custom_style_request": null
+  },
   "rewrite_request": null,
   "target_length": null,
   "existing_text": null
@@ -64,6 +70,10 @@ Rules:
 - Prefer supplied `visual_evidence` over repeating image inspection.
 - Preserve the separate provenance of all text fields.
 - Treat missing optional fields as empty or null.
+- Treat a missing `style` as `default_polish`, not as a request to choose a
+  style before drafting.
+- Accept `style` only for a post-draft preset adjustment. Accept
+  `custom_style_request` as natural-language E4 evidence.
 - Return a structured error when the selected mode lacks required input.
 
 ## 3. Shared structures
@@ -76,7 +86,13 @@ Evidence:
   "level": "E1",
   "source": "raw_text",
   "content": "这是我第一份工作时买的杯子",
-  "allowed_uses": ["title", "summary", "story_text", "curator_note"]
+  "allowed_uses": [
+    "title",
+    "source_line",
+    "summary",
+    "story_text",
+    "curator_note"
+  ]
 }
 ```
 
@@ -109,14 +125,14 @@ Allowed tone values:
 
 ```json
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "status": "needs_user_input",
   "mode": "ask_followup",
   "needs_followup": true,
   "evidence": [],
   "tone_profile": {},
-  "question_intent": "scene_probe",
-  "question": "如果只补一个画面，你最先想到它出现在哪里？",
+  "question_intent": "time_probe",
+  "question": "你还记得这大概是什么时候吗？",
   "user_actions": [
     {
       "id": "replace_question",
@@ -127,7 +143,7 @@ Allowed tone values:
       "label": "就这样收藏"
     }
   ],
-  "decision_code": "ONE_HIGH_VALUE_GAP"
+  "decision_code": "MANDATORY_OPTIONAL_QUESTION"
 }
 ```
 
@@ -151,13 +167,16 @@ When the user has already answered or explicitly skipped, set `status` to
 
 ```json
 {
-  "contract_version": "1.0",
-  "status": "complete",
+  "contract_version": "1.1",
+  "status": "needs_user_input",
   "mode": "compose_memory",
+  "draft_stage": "base_polished",
+  "revision_state": "awaiting_direction",
   "text_type": "story",
   "evidence": [],
   "tone_profile": {},
   "title": "",
+  "source_line": "",
   "summary": "",
   "story_text": "",
   "curator_note": "",
@@ -167,10 +186,25 @@ When the user has already answered or explicitly skipped, set `status` to
   },
   "evidence_bindings": {
     "title": [],
+    "source_line": [],
     "summary": [],
     "story_text": [],
     "curator_note": []
   },
+  "post_draft_actions": [
+    {
+      "id": "keep_draft",
+      "label": "就这样收藏"
+    },
+    {
+      "id": "adjust_style",
+      "label": "调整风格"
+    },
+    {
+      "id": "custom_style",
+      "label": "自定义风格"
+    }
+  ],
   "audit": {
     "passed": true,
     "unsupported_claims": [],
@@ -179,9 +213,35 @@ When the user has already answered or explicitly skipped, set `status` to
 }
 ```
 
+For the first integrated result, use `draft_stage: "base_polished"` and
+`revision_state: "awaiting_direction"`. Generate it before any style selection.
+Set `status` to `needs_user_input` because the user may keep or adjust it.
+
+For a preset or custom rewrite, use `draft_stage: "restyled"` and keep
+`revision_state: "awaiting_direction"` until the user chooses `keep_draft`.
+When the user keeps the current draft, set `status: "complete"`,
+`revision_state: "finalized"`, and return an empty `post_draft_actions` array.
+
+`source_line` is required, should be 4-18 Chinese characters, and must remain
+independent from body style. Prefer time + E1-supported person + event. If time
+is absent, preserve the E1-supported person before a key line or action. If no
+person is supported, use the object or event without inventing a relationship.
+
 `curator_profile` is public-safe metadata. Never include a reference person's
 name or fields such as `reference_person`, `author`, `inspired_by`, or
 `style_imitation`.
+
+### Post-draft style selection
+
+For `adjust_style`, return the five preset body styles from
+`references/styles.md`. For `custom_style`, ask:
+
+`你想让这段正文怎么写？`
+
+The user may describe voice, length, structure, level of polish, or a creator
+reference in natural language. Treat this as E4, not as a new factual follow-up.
+Return extracted `style_features` in a restyled structured response when the
+caller requests JSON.
 
 ### Polish
 
@@ -189,7 +249,7 @@ Require `existing_text` or source text. Return:
 
 ```json
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "status": "complete",
   "mode": "polish_text",
   "polished_text": "",
@@ -211,7 +271,7 @@ Use the polish schema with `mode: "expand_text"` and fields
 
 ```json
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "status": "needs_user_input",
   "mode": "optimization_options",
   "question": "你想把这段话往哪个方向改？",
@@ -237,7 +297,7 @@ Use fields `rewrite_request`, `style_features`, `rewritten_text`,
 
 ```json
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "status": "complete",
   "mode": "audit_text",
   "audit": {
@@ -258,7 +318,7 @@ Use fields `rewrite_request`, `style_features`, `rewritten_text`,
 
 ```json
 {
-  "contract_version": "1.0",
+  "contract_version": "1.1",
   "status": "blocked",
   "mode": "expand_text",
   "error_code": "MISSING_SOURCE_TEXT",
@@ -276,6 +336,7 @@ Use:
 - `IMAGE_UNAVAILABLE`
 - `INVALID_CONTRACT_VERSION`
 - `UNSUPPORTED_STYLE`
+- `EMPTY_CUSTOM_STYLE_REQUEST`
 - `OUTPUT_FAILED_AUDIT`
 
 Do not erase or replace the caller's source material in an error response.

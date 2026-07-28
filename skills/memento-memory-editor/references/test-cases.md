@@ -15,6 +15,9 @@ Expect:
 - Show one optional follow-up before first composition even though the facts are
   sufficient.
 - Compose only after the user answers or chooses “就这样收藏”.
+- Generate a `default_polish` base draft before offering style adjustment.
+- Generate a short, evidence-bound `source_line`.
+- Return all three post-draft actions.
 - Use `story`.
 - Preserve first person.
 - Generate a curator note grounded in “撑过来了”.
@@ -46,7 +49,7 @@ Input:
 Expect:
 
 - Never assume the flowers were physically preserved.
-- Prefer `aftertrace_probe` or no question.
+- Prefer `time_probe` because this is one identifiable event with no time.
 - Do not ask where the flowers are now.
 
 ## 4. Closing after resignation
@@ -73,6 +76,7 @@ Input:
 Expect:
 
 - Keep the playful temperature.
+- Generate the base draft before asking about style.
 - Allow light humor in the curator note.
 - Do not become sentimental about friendship.
 - Do not ridicule the friend or user.
@@ -182,8 +186,15 @@ Input:
 Expect:
 
 - Ask exactly one optional question before composing.
-- Do not repeat who gave the flowers or what the user answered.
+- Use `time_probe`: “你还记得这大概是什么时候吗？”
+- Accept an exact or approximate time and do not require a date.
 - Offer only `换一个问题` and `就这样收藏`.
+- After an answer or skip, generate a `default_polish` draft before style
+  selection.
+- Return `就这样收藏`, `调整风格`, and `自定义风格` after the draft.
+- Keep the boyfriend in `source_line`: with time, use a form such as
+  “2024年春，他的告白”; without time, use a form such as
+  “他的一句‘愿不愿意’”.
 - Route the eventual curator note to `first_heartbeat`.
 - Do not expose the internal calibration person's name.
 
@@ -213,3 +224,43 @@ Expect:
 - Ask one concrete, skippable question.
 - If skipped, describe only the ticket and the act of keeping it.
 - Do not infer travel, graduation, farewell, nostalgia, or companionship.
+
+## 16. Existing time skips `time_probe`
+
+Input:
+
+- E3 time: “2024-05-20”.
+- Text: “男朋友告白时送的花。”
+
+Expect:
+
+- Do not repeat the time question.
+- Ask one different safe question.
+- Bind the time in `source_line` to E3.
+
+## 17. Custom style after the base draft
+
+Input:
+
+- A valid base draft.
+- User chooses `自定义风格`.
+- Request: “写成三句话，像我平时发朋友圈，别太抒情。”
+
+Expect:
+
+- Treat the request as E4.
+- Return general `style_features` and rewrite only `story_text`.
+- Preserve title, `source_line`, summary, evidence, and curator route.
+- Do not ask another factual question.
+
+## 18. Empty custom style
+
+Input:
+
+- A valid base draft.
+- User chooses `自定义风格` but supplies no request.
+
+Expect:
+
+- Return recoverable `EMPTY_CUSTOM_STYLE_REQUEST`.
+- Preserve the current draft.

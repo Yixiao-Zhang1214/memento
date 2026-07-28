@@ -84,10 +84,12 @@ Apply the same profile across the flow:
 
 - A playful question should not lead to a sentimental body.
 - A restrained body should not end with a grand, uplifting curator note.
-- A selected body style must not override the curator emotion route.
+- A post-draft body style must not override `source_line` or the curator emotion
+  route.
 - A terse user can receive polished prose, but the prose must not become a
   different social voice.
-- User-requested style affects diction after evidence and tone safety.
+- User-requested style affects diction only after the default-polished draft,
+  evidence, and tone safety.
 
 ## Good and bad examples
 
