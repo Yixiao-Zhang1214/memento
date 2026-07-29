@@ -6,6 +6,23 @@ function wait(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
 }
 
+function retryDelayMs(response) {
+  const header = response.headers.get("retry-after");
+  if (header) {
+    const seconds = Number(header);
+    if (Number.isFinite(seconds)) {
+      return Math.min(5_000, Math.max(250, seconds * 1_000));
+    }
+    const date = Date.parse(header);
+    if (Number.isFinite(date)) {
+      return Math.min(5_000, Math.max(250, date - Date.now()));
+    }
+  }
+  return response.status === 429
+    ? 3_000 + Math.floor(Math.random() * 2_000)
+    : 500;
+}
+
 function mapUpstreamError(status) {
   if (status === 401 || status === 403) {
     return new AppError({
@@ -90,7 +107,7 @@ export class BigModelClient {
         if (!response.ok) {
           lastError = mapUpstreamError(response.status);
           if (attempt === 0 && RETRYABLE_STATUS.has(response.status)) {
-            await wait(250);
+            await wait(retryDelayMs(response));
             continue;
           }
           throw lastError;

@@ -50,7 +50,10 @@ test("BigModel client retries a rate limit once", async () => {
   const fetchImpl = async () => {
     attempts += 1;
     if (attempts === 1) {
-      return new Response("rate limited", { status: 429 });
+      return new Response("rate limited", {
+        status: 429,
+        headers: { "Retry-After": "0" }
+      });
     }
     return new Response(
       JSON.stringify({
