@@ -13,7 +13,7 @@ import {
 } from "./validation.js";
 
 const TEXT_PARAMETERS = Object.freeze({
-  thinking: { type: "enabled" },
+  thinking: { type: "disabled" },
   temperature: 0.7,
   maxTokens: 4096,
   responseFormat: { type: "json_object" }
@@ -34,11 +34,23 @@ const FALLBACK_ERROR_CODES = new Set([
 ]);
 const LOCAL_RECOVERY_REASONS = new Set([
   "QUESTION_REPEATS_KNOWN_INFORMATION",
+  "QUESTION_MISSES_TEXT_TARGET",
   "UNSUPPORTED_TIME_CLAIM",
   "UNSUPPORTED_NARRATIVE_EXPANSION",
   "UNSUPPORTED_NARRATIVE_CLAIM",
+  "INSUFFICIENT_EVIDENCE_COVERAGE",
   "UNSUPPORTED_VOICE_SHIFT"
 ]);
+const VISUAL_METADATA_FALLBACK = "用户上传了一张图片";
+const MODEL_COOLDOWN_MS = 60_000;
+
+function supportsLocalRecovery(error) {
+  return (
+    error instanceof AppError &&
+    (error.code === "MODEL_OUTPUT_INVALID" ||
+      FALLBACK_ERROR_CODES.has(error.code))
+  );
+}
 
 function allowedUses() {
   return ["title", "source_line", "summary", "story_text", "curator_note"];
@@ -156,6 +168,12 @@ function safeQuestionFor(input) {
     return {
       intent: "significance_probe",
       question: "用了这么久，你最舍不得它的是什么？"
+    };
+  }
+  if (/(关键词|口号|标语|一句话)/.test(rawText)) {
+    return {
+      intent: "significance_probe",
+      question: "你为什么想把这句话留到现在？"
     };
   }
   return {
@@ -371,13 +389,57 @@ export class MementoService {
     this.modelClient = modelClient;
     this.promptLoader = promptLoader;
     this.logger = logger;
+    this.modelCooldowns = new Map();
+  }
+
+  isModelCoolingDown(model) {
+    return (this.modelCooldowns.get(model) ?? 0) > Date.now();
+  }
+
+  noteModelFailure(model, error, requestId, purpose) {
+    if (!(error instanceof AppError) || !FALLBACK_ERROR_CODES.has(error.code)) {
+      return;
+    }
+    const until = Date.now() + MODEL_COOLDOWN_MS;
+    this.modelCooldowns.set(model, until);
+    this.logger.warn?.({
+      requestId,
+      purpose,
+      model,
+      code: error.code,
+      decision: "open_model_circuit",
+      cooldownMs: MODEL_COOLDOWN_MS
+    });
+  }
+
+  circuitOpenError() {
+    return new AppError({
+      code: "UPSTREAM_UNAVAILABLE",
+      message: "模型服务正在恢复，已切换到安全整理。",
+      status: 503,
+      retryable: true
+    });
   }
 
   async process(rawInput, requestId) {
     const input = normalizeInput(rawInput, this.config);
 
     if (input.image && input.visual_evidence.length === 0) {
-      input.visual_evidence = await this.extractVisualEvidence(input, requestId);
+      try {
+        input.visual_evidence = await this.extractVisualEvidence(
+          input,
+          requestId
+        );
+      } catch (error) {
+        if (!supportsLocalRecovery(error)) throw error;
+        this.logger.warn?.({
+          requestId,
+          purpose: "vision",
+          code: error.code,
+          decision: "continue_with_upload_metadata"
+        });
+        input.visual_evidence = [VISUAL_METADATA_FALLBACK];
+      }
     }
 
     const evidence = buildEvidence(input);
@@ -617,20 +679,26 @@ export class MementoService {
           }
           if (["follow_up", "compose", "rewrite"].includes(purpose)) break;
         }
+        if (
+          FALLBACK_ERROR_CODES.has(error?.code) &&
+          ["follow_up", "compose", "rewrite"].includes(purpose)
+        ) {
+          break;
+        }
         throw error;
       }
     }
 
-    this.logger.error?.({
+    this.logger.warn?.({
       requestId,
       code: lastError?.code ?? "MODEL_OUTPUT_INVALID",
-      purpose
+      purpose,
+      decision: "continue_with_local_editorial_fallback"
     });
 
     if (
       purpose === "follow_up" &&
-      lastError instanceof AppError &&
-      lastError.code === "MODEL_OUTPUT_INVALID"
+      supportsLocalRecovery(lastError)
     ) {
       const safeFollowup = buildSafeFollowup(input, evidence);
       return validateFollowupRelevance(
@@ -643,8 +711,7 @@ export class MementoService {
 
     if (
       purpose === "compose" &&
-      lastError instanceof AppError &&
-      lastError.code === "MODEL_OUTPUT_INVALID"
+      supportsLocalRecovery(lastError)
     ) {
       const safeComposition = buildSafeComposition(input, evidence);
       return validateComposeEvidence(
@@ -655,8 +722,7 @@ export class MementoService {
 
     if (
       purpose === "rewrite" &&
-      lastError instanceof AppError &&
-      lastError.code === "MODEL_OUTPUT_INVALID"
+      supportsLocalRecovery(lastError)
     ) {
       const safeRewrite = buildSafeRewrite(input);
       return validateRewriteEvidence(
@@ -687,17 +753,17 @@ export class MementoService {
       : parameters;
 
     try {
+      if (this.isModelCoolingDown(model)) {
+        throw this.circuitOpenError();
+      }
       const response = await this.modelClient.complete({
         purpose,
         model,
         messages,
         input,
         evidence,
-        timeoutMs: purpose.startsWith("vision") || alreadyUsingFallback
-          ? this.config.requestTimeoutMs
-          : this.config.primaryTextTimeoutMs,
-        maxAttempts:
-          purpose.startsWith("vision") || alreadyUsingFallback ? 2 : 1,
+        timeoutMs: this.config.primaryTextTimeoutMs,
+        maxAttempts: 1,
         ...firstParameters
       });
       return {
@@ -706,6 +772,7 @@ export class MementoService {
         fallbackUsed: Boolean(alreadyUsingFallback)
       };
     } catch (error) {
+      this.noteModelFailure(model, error, requestId, purpose);
       const fallbackModel = configuredFallback;
       const canFallback =
         !purpose.startsWith("vision") &&
@@ -740,21 +807,34 @@ export class MementoService {
         ...parameters,
         thinking: undefined
       };
-      const response = await this.modelClient.complete({
-        purpose: `${purpose}_fallback`,
-        model: fallbackModel,
-        messages,
-        input,
-        evidence,
-        timeoutMs: this.config.requestTimeoutMs,
-        maxAttempts: 2,
-        ...fallbackParameters
-      });
-      return {
-        response,
-        modelUsed: fallbackModel,
-        fallbackUsed: true
-      };
+      try {
+        if (this.isModelCoolingDown(fallbackModel)) {
+          throw this.circuitOpenError();
+        }
+        const response = await this.modelClient.complete({
+          purpose: `${purpose}_fallback`,
+          model: fallbackModel,
+          messages,
+          input,
+          evidence,
+          timeoutMs: this.config.primaryTextTimeoutMs,
+          maxAttempts: 1,
+          ...fallbackParameters
+        });
+        return {
+          response,
+          modelUsed: fallbackModel,
+          fallbackUsed: true
+        };
+      } catch (fallbackError) {
+        this.noteModelFailure(
+          fallbackModel,
+          fallbackError,
+          requestId,
+          `${purpose}_fallback`
+        );
+        throw fallbackError;
+      }
     }
   }
 }

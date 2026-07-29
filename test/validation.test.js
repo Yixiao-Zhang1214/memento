@@ -98,6 +98,23 @@ test("a follow-up cannot ask a duration already supplied", () => {
   );
 });
 
+test("a follow-up follows a written keyword instead of image atmosphere", () => {
+  assert.throws(
+    () =>
+      validateFollowupRelevance(
+        { question: "你在这幅画中感受到了怎样的氛围？" },
+        {
+          raw_text: "这是字节跳动今年的关键词，勇攀高峰。",
+          transcript_text: "",
+          visual_evidence: ["画面中有一座山"]
+        }
+      ),
+    (error) =>
+      error.code === "MODEL_OUTPUT_INVALID" &&
+      error.details?.reason === "QUESTION_MISSES_TEXT_TARGET"
+  );
+});
+
 test("a composed memory cannot invent a calendar year", () => {
   assert.throws(
     () =>
@@ -176,5 +193,29 @@ test("style rewrite cannot change the narrator or add unsupported meaning", () =
         "UNSUPPORTED_NARRATIVE_CLAIM",
         "UNSUPPORTED_VOICE_SHIFT"
       ].includes(error.details?.reason)
+  );
+});
+
+test("a composed memory cannot drop the user's organization and keyword", () => {
+  assert.throws(
+    () =>
+      validateComposeEvidence(
+        {
+          title: "勇攀高峰",
+          source_line: "山顶的剪影",
+          summary: "星空下的攀登。",
+          story_text: "山顶上有三道剪影高举双手。",
+          curator_note: "星光把欢呼留在高处。"
+        },
+        {
+          raw_text: "这是字节跳动今年的关键词，勇攀高峰。",
+          transcript_text: "",
+          follow_up_answer: "",
+          visual_evidence: ["画面中有一座山"]
+        }
+      ),
+    (error) =>
+      error.code === "MODEL_OUTPUT_INVALID" &&
+      error.details?.reason === "INSUFFICIENT_EVIDENCE_COVERAGE"
   );
 });

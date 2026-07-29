@@ -441,20 +441,32 @@ export function validateFollowupRelevance(output, input = {}) {
     /(?:怎么|如何|有没有|是否).{0,8}(?:回答|回应|答应)|你.{0,8}(?:说了什么|答应了吗)/.test(
       question
     ) && /我说(?:好|可以|愿意)|我答应/.test(supplied);
+  const hasTextFirstTarget = /(关键词|口号|标语|一句话)/.test(supplied);
+  const followsTextFirstTarget =
+    /(关键词|口号|标语|这句话|为什么.{0,8}留|想.{0,8}留下)/.test(
+      question
+    );
 
   if (
     (asksWhen && alreadyHasTime) ||
     (asksReplacementReason && alreadyHasReplacementReason) ||
     asksKnownTravelNext ||
-    asksKnownReply
+    asksKnownReply ||
+    (hasTextFirstTarget && !followsTextFirstTarget)
   ) {
+    const reason =
+      hasTextFirstTarget && !followsTextFirstTarget
+        ? "QUESTION_MISSES_TEXT_TARGET"
+        : "QUESTION_REPEATS_KNOWN_INFORMATION";
     throw new AppError({
       code: "MODEL_OUTPUT_INVALID",
       message:
-        "追问重复了用户已经说明的信息。请换一个能为正文增加新内容的自然问题。",
+        reason === "QUESTION_MISSES_TEXT_TARGET"
+          ? "追问只停留在图片，没有跟随用户主动写下的内容。请围绕那句话或它背后的事情提问。"
+          : "追问重复了用户已经说明的信息。请换一个能为正文增加新内容的自然问题。",
       status: 502,
       retryable: true,
-      details: { reason: "QUESTION_REPEATS_KNOWN_INFORMATION" }
+      details: { reason }
     });
   }
 
@@ -618,6 +630,52 @@ export function validateComposeEvidence(output, input = {}) {
         reason: "UNSUPPORTED_NARRATIVE_CLAIM",
         claim: unsupportedClaim
       }
+    });
+  }
+
+  const generatedCorpus = [
+    output.title,
+    output.source_line,
+    output.summary,
+    output.story_text,
+    output.curator_note
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const ignoredCharacters = new Set(
+    Array.from(
+      "，。！？、；：,.!?;:（）()“”\"'的是了在我你他她它这那有和就也都很又把被给着过一个因为所以而与及"
+    )
+  );
+  const evidenceSegments = [
+    input.raw_text,
+    input.transcript_text,
+    input.follow_up_answer
+  ].filter(Boolean);
+  const missingSegment = evidenceSegments.find((segment) => {
+    const meaningful = [
+      ...new Set(
+        Array.from(segment).filter(
+          (character) =>
+            !ignoredCharacters.has(character) && !/\s/.test(character)
+        )
+      )
+    ];
+    if (meaningful.length < 4) return false;
+    const retained = meaningful.filter((character) =>
+      generatedCorpus.includes(character)
+    ).length;
+    return retained / meaningful.length < 0.55;
+  });
+
+  if (missingSegment) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message:
+        "成稿遗漏了用户输入中的关键信息。请保留用户主动写下的人名、组织、原话和关键事件。",
+      status: 502,
+      retryable: true,
+      details: { reason: "INSUFFICIENT_EVIDENCE_COVERAGE" }
     });
   }
 

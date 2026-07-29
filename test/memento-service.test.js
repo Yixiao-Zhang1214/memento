@@ -108,6 +108,60 @@ test("a busy primary text model falls back without blocking the memory flow", as
   });
 });
 
+test("two rate-limited text models still return a local follow-up", async () => {
+  const config = loadConfig({ MEMENTO_MOCK_MODE: "true" });
+  const promptLoader = await new PromptLoader(config.skillDirectory).initialize();
+  const calls = [];
+  const service = new MementoService({
+    config,
+    modelClient: {
+      async complete(request) {
+        calls.push(request);
+        throw new AppError({
+          code: "UPSTREAM_RATE_LIMITED",
+          message: "busy",
+          status: 503,
+          retryable: true
+        });
+      }
+    },
+    promptLoader,
+    logger: { info() {}, warn() {}, error() {} }
+  });
+
+  const result = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "auto",
+      raw_text: "这是我用了六年的手机，只有64G，现在内存不够了。"
+    },
+    "double-rate-limit-test"
+  );
+
+  assert.deepEqual(
+    calls.map((call) => call.model),
+    [config.textModel, config.textFallbackModel]
+  );
+  assert.ok(calls.every((call) => call.maxAttempts === 1));
+  assert.equal(result.mode, "ask_followup");
+  assert.equal(result.question, "用了这么久，你最舍不得它的是什么？");
+  assert.equal(result.runtime.model_used, "local-editorial-fallback");
+
+  const secondResult = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "auto",
+      raw_text: "这是我用了六年的手机，只有64G，现在内存不够了。"
+    },
+    "double-rate-limit-test-2"
+  );
+  assert.equal(calls.length, 2, "熔断期间不再请求两个故障模型");
+  assert.equal(
+    secondResult.runtime.model_used,
+    "local-editorial-fallback"
+  );
+});
+
 test("two repetitive model questions recover to a safe local question", async () => {
   const config = loadConfig({ MEMENTO_MOCK_MODE: "true" });
   const promptLoader = await new PromptLoader(config.skillDirectory).initialize();
@@ -228,6 +282,118 @@ test("image evidence is extracted once and reused by text generation", async () 
     "智谱视觉接口接收原始 Base64，不添加 data URL 前缀"
   );
   assert.ok(result.evidence.some((item) => item.level === "E2"));
+});
+
+test("rate-limited vision continues with safe upload metadata", async () => {
+  const config = loadConfig({ MEMENTO_MOCK_MODE: "true" });
+  const promptLoader = await new PromptLoader(config.skillDirectory).initialize();
+  const calls = [];
+  const inner = new MockModelClient();
+  const service = new MementoService({
+    config,
+    modelClient: {
+      async complete(request) {
+        calls.push(request);
+        if (request.purpose.startsWith("vision")) {
+          throw new AppError({
+            code: "UPSTREAM_RATE_LIMITED",
+            message: "busy",
+            status: 503,
+            retryable: true
+          });
+        }
+        return inner.complete(request);
+      }
+    },
+    promptLoader,
+    logger: { info() {}, warn() {}, error() {} }
+  });
+
+  const result = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "auto",
+      raw_text: "",
+      image: {
+        mime_type: "image/jpeg",
+        data_base64: "YWJj"
+      },
+      visual_evidence: []
+    },
+    "vision-rate-limit-test"
+  );
+
+  const visionCall = calls.find((call) => call.purpose === "vision");
+  assert.equal(visionCall.maxAttempts, 1);
+  assert.equal(visionCall.timeoutMs, 15_000);
+  assert.equal(result.mode, "ask_followup");
+  assert.ok(
+    result.evidence.some(
+      (item) =>
+        item.level === "E2" && item.content === "用户上传了一张图片"
+    )
+  );
+
+  await service.process(
+    {
+      contract_version: "1.1",
+      mode: "auto",
+      raw_text: "",
+      image: {
+        mime_type: "image/jpeg",
+        data_base64: "YWJj"
+      },
+      visual_evidence: []
+    },
+    "vision-rate-limit-test-2"
+  );
+  assert.equal(
+    calls.filter((call) => call.purpose.startsWith("vision")).length,
+    1,
+    "视觉模型熔断期间不再重复请求"
+  );
+});
+
+test("image-only memory can still compose when every model is rate-limited", async () => {
+  const config = loadConfig({ MEMENTO_MOCK_MODE: "true" });
+  const promptLoader = await new PromptLoader(config.skillDirectory).initialize();
+  const service = new MementoService({
+    config,
+    modelClient: {
+      async complete() {
+        throw new AppError({
+          code: "UPSTREAM_RATE_LIMITED",
+          message: "busy",
+          status: 503,
+          retryable: true
+        });
+      }
+    },
+    promptLoader,
+    logger: { info() {}, warn() {}, error() {} }
+  });
+
+  const result = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "compose_memory",
+      raw_text: "",
+      visual_evidence: ["用户上传了一张图片"],
+      user_skipped: true,
+      question_state: {
+        asked: true,
+        replaced: false,
+        answered: false,
+        closed: true
+      }
+    },
+    "image-only-compose-test"
+  );
+
+  assert.equal(result.mode, "compose_memory");
+  assert.equal(result.text_type, "quiet");
+  assert.match(result.story_text, /用户上传了一张图片/);
+  assert.equal(result.runtime.model_used, "local-editorial-fallback");
 });
 
 test("question replacement removes the second replacement action", async () => {
