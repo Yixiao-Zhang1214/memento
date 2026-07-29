@@ -44,6 +44,16 @@ Statuses:
   "follow_up_question": null,
   "follow_up_answer": "",
   "user_skipped": false,
+  "conversation_history": [],
+  "conversation_round": {
+    "index": 0,
+    "trigger": "initial",
+    "asked": false,
+    "replaced": false,
+    "answered": false,
+    "closed": false,
+    "previous_intent": null
+  },
   "question_state": {
     "asked": false,
     "replaced": false,
@@ -69,6 +79,13 @@ Rules:
 - Treat `image_ref` as opaque. Inspect it only when the runtime can access it.
 - Prefer supplied `visual_evidence` over repeating image inspection.
 - Preserve the separate provenance of all text fields.
+- In `conversation_history`, accept `initial`, `supplement`, and `answer` items
+  only from role `user`; accept `question` only from role `assistant`.
+- Convert only user history items into E1 evidence. Use assistant questions to
+  prevent repetition, never as facts.
+- `conversation_round.trigger` is `initial`, `supplement`, or `ask_more`.
+- A user-opened post-draft round receives the same one-question, one-replacement
+  budget as the initial round.
 - Treat missing optional fields as empty or null.
 - Treat a missing `style` as `default_polish`, not as a request to choose a
   style before drafting.
@@ -193,6 +210,14 @@ When the user has already answered or explicitly skipped, set `status` to
   },
   "post_draft_actions": [
     {
+      "id": "continue_supplement",
+      "label": "继续补充"
+    },
+    {
+      "id": "ask_more",
+      "label": "再问我一个问题"
+    },
+    {
       "id": "keep_draft",
       "label": "就这样收藏"
     },
@@ -216,6 +241,8 @@ When the user has already answered or explicitly skipped, set `status` to
 For the first integrated result, use `draft_stage: "base_polished"` and
 `revision_state: "awaiting_direction"`. Generate it before any style selection.
 Set `status` to `needs_user_input` because the user may keep or adjust it.
+The user may also supplement the memory or explicitly open another question
+round. These actions do not permit the system to start a new question by itself.
 
 For a preset or custom rewrite, use `draft_stage: "restyled"` and keep
 `revision_state: "awaiting_direction"` until the user chooses `keep_draft`.

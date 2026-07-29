@@ -37,6 +37,8 @@ QUESTION_INTENTS = {
 DRAFT_STAGES = {"base_polished", "restyled"}
 REVISION_STATES = {"awaiting_direction", "finalized"}
 POST_DRAFT_ACTIONS = {
+    "continue_supplement": "继续补充",
+    "ask_more": "再问我一个问题",
     "keep_draft": "就这样收藏",
     "adjust_style": "调整风格",
     "custom_style": "自定义风格",
@@ -276,9 +278,9 @@ def validate_draft_state(data: dict[str, Any], errors: list[str]) -> None:
             errors.append(
                 "status: must be needs_user_input while awaiting draft direction"
             )
-        if len(actions) != 3:
+        if len(actions) != 5:
             errors.append(
-                "post_draft_actions: expected three actions while awaiting direction"
+                "post_draft_actions: expected five actions while awaiting direction"
             )
     elif revision == "finalized":
         if data.get("status") != "complete":
@@ -311,8 +313,8 @@ def validate_draft_state(data: dict[str, Any], errors: list[str]) -> None:
 
     if revision == "awaiting_direction" and seen != set(POST_DRAFT_ACTIONS):
         errors.append(
-            "post_draft_actions: must include keep_draft, adjust_style, "
-            "and custom_style"
+            "post_draft_actions: must include continue_supplement, ask_more, "
+            "keep_draft, adjust_style, and custom_style"
         )
 
 

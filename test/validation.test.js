@@ -29,6 +29,68 @@ test("normalization rejects unsupported images", () => {
   );
 });
 
+test("normalization accepts history-only input and removes duplicate entry ids", () => {
+  const normalized = normalizeInput(
+    {
+      contract_version: "1.1",
+      mode: "compose_memory",
+      conversation_history: [
+        {
+          id: "entry-1",
+          round: 0,
+          role: "user",
+          kind: "initial",
+          content: "这是第一段内容。"
+        },
+        {
+          id: "entry-1",
+          round: 1,
+          role: "user",
+          kind: "supplement",
+          content: "这条重复 ID 不应再次进入历史。"
+        },
+        {
+          id: "entry-2",
+          round: 1,
+          role: "assistant",
+          kind: "question",
+          content: "后来又发生了什么？"
+        }
+      ],
+      conversation_round: {
+        index: 1,
+        trigger: "supplement"
+      }
+    },
+    limits
+  );
+
+  assert.equal(normalized.conversation_history.length, 2);
+  assert.equal(normalized.conversation_round.index, 1);
+  assert.equal(normalized.conversation_round.trigger, "supplement");
+});
+
+test("normalization rejects a question disguised as user history", () => {
+  assert.throws(
+    () =>
+      normalizeInput(
+        {
+          conversation_history: [
+            {
+              id: "entry-1",
+              round: 0,
+              role: "user",
+              kind: "question",
+              content: "这是一个错误角色的问题。"
+            }
+          ]
+        },
+        limits
+      ),
+    (error) => error.code === "INVALID_INPUT"
+  );
+});
+
 test("JSON parser accepts a fenced upstream result", () => {
   assert.deepEqual(parseJsonContent("```json\n{\"ok\":true}\n```"), {
     ok: true
@@ -95,6 +157,126 @@ test("a follow-up cannot ask a duration already supplied", () => {
         }
       ),
     (error) => error.code === "MODEL_OUTPUT_INVALID"
+  );
+});
+
+test("a follow-up cannot repeat an earlier assistant question", () => {
+  assert.throws(
+    () =>
+      validateFollowupRelevance(
+        { question: "用了这么久，你最舍不得它的是什么？" },
+        {
+          raw_text: "这是我用了六年的手机。",
+          transcript_text: "",
+          visual_evidence: [],
+          conversation_history: [
+            {
+              id: "entry-1",
+              round: 0,
+              role: "assistant",
+              kind: "question",
+              content: "用了这么久，你最舍不得它的是什么？"
+            }
+          ]
+        }
+      ),
+    (error) =>
+      error.code === "MODEL_OUTPUT_INVALID" &&
+      error.details?.reason === "QUESTION_REPEATS_HISTORY"
+  );
+});
+
+test("a follow-up cannot ask what was most missed after the user already said it", () => {
+  assert.throws(
+    () =>
+      validateFollowupRelevance(
+        { question: "用了这么久，你最舍不得它的是什么？" },
+        {
+          raw_text: "这是我用了六年的手机。",
+          transcript_text: "",
+          visual_evidence: [],
+          conversation_history: [
+            {
+              id: "entry-1",
+              round: 0,
+              role: "user",
+              kind: "initial",
+              content: "这是我用了六年的手机。"
+            },
+            {
+              id: "entry-2",
+              round: 1,
+              role: "user",
+              kind: "supplement",
+              content: "我其实最舍不得的是它的直面屏。"
+            }
+          ]
+        }
+      ),
+    (error) =>
+      error.code === "MODEL_OUTPUT_INVALID" &&
+      error.details?.reason === "QUESTION_REPEATS_KNOWN_INFORMATION"
+  );
+});
+
+test("a supplement round must follow the newly added detail", () => {
+  assert.throws(
+    () =>
+      validateFollowupRelevance(
+        { question: "除了内存，它最好用的地方是什么？" },
+        {
+          raw_text: "这是我用了六年的手机，只有64G。",
+          transcript_text: "",
+          visual_evidence: [],
+          conversation_history: [
+            {
+              id: "entry-1",
+              round: 0,
+              role: "user",
+              kind: "initial",
+              content: "这是我用了六年的手机，只有64G。"
+            },
+            {
+              id: "entry-2",
+              round: 1,
+              role: "user",
+              kind: "supplement",
+              content: "大学毕业时，我用它拍了最后一张宿舍合照。"
+            }
+          ],
+          conversation_round: {
+            index: 1,
+            trigger: "supplement"
+          }
+        }
+      ),
+    (error) =>
+      error.code === "MODEL_OUTPUT_INVALID" &&
+      error.details?.reason === "QUESTION_MISSES_CURRENT_SUPPLEMENT"
+  );
+
+  assert.doesNotThrow(() =>
+    validateFollowupRelevance(
+      { question: "拍下那张照片时，有没有一句话或一个动作你还记得？" },
+      {
+        raw_text: "这是我用了六年的手机，只有64G。",
+        transcript_text: "",
+        visual_evidence: [],
+        conversation_history: [
+          {
+            id: "entry-1",
+            round: 1,
+            role: "user",
+            kind: "supplement",
+            content: "大学毕业时，我用它拍了最后一张宿舍合照。"
+          }
+        ],
+        conversation_round: {
+          index: 1,
+          trigger: "supplement"
+        }
+      }
+    )
   );
 });
 

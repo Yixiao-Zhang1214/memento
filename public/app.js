@@ -1,6 +1,7 @@
 const screens = {
   input: document.querySelector("#inputScreen"),
   question: document.querySelector("#questionScreen"),
+  supplement: document.querySelector("#supplementScreen"),
   draft: document.querySelector("#draftScreen"),
   style: document.querySelector("#styleScreen"),
   custom: document.querySelector("#customStyleScreen"),
@@ -22,15 +23,22 @@ const elements = {
   removeImageButton: document.querySelector("#removeImageButton"),
   rawTextInput: document.querySelector("#rawTextInput"),
   questionText: document.querySelector("#questionText"),
+  questionNote: document.querySelector("#questionNote"),
   answerForm: document.querySelector("#answerForm"),
   answerInput: document.querySelector("#answerInput"),
   replaceQuestionButton: document.querySelector("#replaceQuestionButton"),
   composeNowButton: document.querySelector("#composeNowButton"),
+  supplementForm: document.querySelector("#supplementForm"),
+  supplementInput: document.querySelector("#supplementInput"),
   draftSource: document.querySelector("#draftSource"),
   draftTitle: document.querySelector("#draftTitle"),
   draftSummary: document.querySelector("#draftSummary"),
   draftStory: document.querySelector("#draftStory"),
   draftCurator: document.querySelector("#draftCurator"),
+  continueSupplementButton: document.querySelector(
+    "#continueSupplementButton"
+  ),
+  askMoreButton: document.querySelector("#askMoreButton"),
   keepDraftButton: document.querySelector("#keepDraftButton"),
   adjustStyleButton: document.querySelector("#adjustStyleButton"),
   customStyleButton: document.querySelector("#customStyleButton"),
@@ -45,6 +53,16 @@ const elements = {
 };
 
 const initialQuestionState = () => ({
+  asked: false,
+  replaced: false,
+  answered: false,
+  closed: false,
+  previous_intent: null
+});
+
+const initialConversationRound = () => ({
+  index: 0,
+  trigger: "initial",
   asked: false,
   replaced: false,
   answered: false,
@@ -71,6 +89,9 @@ const state = {
   questionIntent: null,
   followUpAnswer: "",
   questionState: initialQuestionState(),
+  conversationHistory: [],
+  conversationRound: initialConversationRound(),
+  historyEntryCounter: 0,
   draftState: initialDraftState(),
   draft: null,
   lastRetry: null,
@@ -80,6 +101,7 @@ const state = {
 const screenMeta = {
   input: ["新建记忆", false],
   question: ["补充一句", true],
+  supplement: ["继续补充", true],
   draft: ["默认成稿", false],
   style: ["调整风格", true],
   custom: ["自定义风格", true],
@@ -101,7 +123,9 @@ function showScreen(name, { remember = true } = {}) {
   const [label, canGoBack] = screenMeta[name];
   elements.flowLabel.textContent = label;
   elements.headerBackButton.hidden = !canGoBack;
-  document.querySelector(".screen-stack").scrollTo({ top: 0, behavior: "smooth" });
+  document
+    .querySelector(".screen-stack")
+    .scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function setBusy(busy, message = "正在整理这段记忆") {
@@ -178,6 +202,68 @@ function visualEvidenceFrom(result) {
     : state.visualEvidence;
 }
 
+function nextHistoryId() {
+  state.historyEntryCounter += 1;
+  return `entry-${state.historyEntryCounter}`;
+}
+
+function upsertUserHistory(kind, content) {
+  const normalized = content.trim();
+  if (!normalized) return;
+  const existing = state.conversationHistory.find(
+    (item) =>
+      item.round === state.conversationRound.index &&
+      item.role === "user" &&
+      item.kind === kind
+  );
+  if (existing) {
+    existing.content = normalized;
+    return;
+  }
+  state.conversationHistory.push({
+    id: nextHistoryId(),
+    round: state.conversationRound.index,
+    role: "user",
+    kind,
+    content: normalized
+  });
+}
+
+function appendQuestionHistory(content) {
+  const normalized = content.trim();
+  const duplicate = state.conversationHistory.some(
+    (item) =>
+      item.round === state.conversationRound.index &&
+      item.role === "assistant" &&
+      item.kind === "question" &&
+      item.content === normalized
+  );
+  if (duplicate) return;
+  state.conversationHistory.push({
+    id: nextHistoryId(),
+    round: state.conversationRound.index,
+    role: "assistant",
+    kind: "question",
+    content: normalized
+  });
+}
+
+function startConversationRound(trigger) {
+  const current = state.conversationRound;
+  if (!current.closed && current.trigger === trigger && current.index > 0) {
+    return;
+  }
+  state.conversationRound = {
+    ...initialConversationRound(),
+    index: current.index + 1,
+    trigger
+  };
+  state.questionState = initialQuestionState();
+  state.question = null;
+  state.questionIntent = null;
+  state.followUpAnswer = "";
+}
+
 function basePayload() {
   return {
     contract_version: "1.1",
@@ -189,6 +275,8 @@ function basePayload() {
     follow_up_answer: state.followUpAnswer,
     user_skipped: false,
     question_state: state.questionState,
+    conversation_history: state.conversationHistory,
+    conversation_round: state.conversationRound,
     style: null,
     draft_state: state.draftState,
     rewrite_request: null,
@@ -207,21 +295,44 @@ function acceptFollowup(result) {
     asked: true,
     previous_intent: result.question_intent
   };
+  state.conversationRound = {
+    ...state.conversationRound,
+    asked: true,
+    previous_intent: result.question_intent
+  };
+  appendQuestionHistory(result.question);
+
+  const continuing = state.conversationRound.trigger !== "initial";
   elements.questionText.textContent = result.question;
+  elements.questionNote.textContent = continuing
+    ? "可以简单回答，也可以先这样更新这版文字。"
+    : "可以简单回答，也可以直接收藏。";
+  elements.composeNowButton.textContent = continuing
+    ? "先这样更新"
+    : "就这样收藏";
   elements.replaceQuestionButton.hidden = state.questionState.replaced;
   elements.answerInput.value = "";
   showScreen("question");
+  if (continuing) {
+    elements.flowLabel.textContent = `继续聊 · 第${state.conversationRound.index}轮`;
+  }
 }
 
-function renderDraft(draft) {
+function renderDraft(draft, { resetStyle = true } = {}) {
   state.draft = draft;
   state.imagePayload = null;
   state.visualEvidence = visualEvidenceFrom(draft);
-  state.draftState = {
-    ...state.draftState,
-    base_draft_generated: true,
-    revision_state: draft.revision_state ?? "awaiting_direction"
-  };
+  state.draftState = resetStyle
+    ? {
+        ...initialDraftState(),
+        base_draft_generated: true,
+        revision_state: draft.revision_state ?? "awaiting_direction"
+      }
+    : {
+        ...state.draftState,
+        base_draft_generated: true,
+        revision_state: draft.revision_state ?? "awaiting_direction"
+      };
   elements.draftSource.textContent = draft.source_line;
   elements.draftTitle.textContent = draft.title;
   elements.draftSummary.textContent = draft.summary;
@@ -236,6 +347,8 @@ async function beginMemory() {
     showError("请添加一张图片或写下一点内容。");
     return;
   }
+
+  upsertUserHistory("initial", state.rawText);
 
   if (state.imageFile && !state.imagePayload) {
     try {
@@ -255,8 +368,24 @@ async function beginMemory() {
   if (result.mode === "ask_followup") {
     acceptFollowup(result);
   } else {
+    state.conversationRound = {
+      ...state.conversationRound,
+      closed: true
+    };
     renderDraft(result);
   }
+}
+
+async function requestFollowup({
+  loadingText = "正在顺着这段记忆想一个问题"
+} = {}) {
+  const run = () => requestFollowup({ loadingText });
+  const result = await apiRequest(
+    { ...basePayload(), mode: "ask_followup" },
+    { loadingText, retry: run }
+  );
+  if (!result) return;
+  acceptFollowup(result);
 }
 
 async function replaceQuestion() {
@@ -266,28 +395,47 @@ async function replaceQuestion() {
     replaced: true,
     previous_intent: state.questionIntent
   };
+  const nextConversationRound = {
+    ...state.conversationRound,
+    asked: true,
+    replaced: true,
+    previous_intent: state.questionIntent
+  };
   const run = () => replaceQuestion();
   const result = await apiRequest(
     {
       ...basePayload(),
       mode: "ask_followup",
-      question_state: nextQuestionState
+      question_state: nextQuestionState,
+      conversation_round: nextConversationRound
     },
     { loadingText: "正在换一个更合适的问题", retry: run }
   );
   if (!result) return;
   state.questionState = nextQuestionState;
+  state.conversationRound = nextConversationRound;
   acceptFollowup(result);
 }
 
 async function composeMemory({ answer = "", skipped = false } = {}) {
   state.followUpAnswer = answer.trim();
+  if (state.followUpAnswer) {
+    upsertUserHistory("answer", state.followUpAnswer);
+  }
+
   const nextQuestionState = {
     ...state.questionState,
     asked: true,
     answered: Boolean(state.followUpAnswer),
     closed: true
   };
+  const nextConversationRound = {
+    ...state.conversationRound,
+    asked: true,
+    answered: Boolean(state.followUpAnswer),
+    closed: true
+  };
+  const nextDraftState = initialDraftState();
   const run = () => composeMemory({ answer, skipped });
   const result = await apiRequest(
     {
@@ -295,13 +443,37 @@ async function composeMemory({ answer = "", skipped = false } = {}) {
       mode: "compose_memory",
       follow_up_answer: state.followUpAnswer,
       user_skipped: skipped,
-      question_state: nextQuestionState
+      question_state: nextQuestionState,
+      conversation_round: nextConversationRound,
+      draft_state: nextDraftState
     },
-    { loadingText: "正在把这些话整理成一段记忆", retry: run }
+    { loadingText: "正在把这些话重新整理成完整的一版", retry: run }
   );
   if (!result) return;
   state.questionState = nextQuestionState;
-  renderDraft(result);
+  state.conversationRound = nextConversationRound;
+  state.draftState = nextDraftState;
+  renderDraft(result, { resetStyle: true });
+}
+
+async function submitSupplement() {
+  const supplement = elements.supplementInput.value.trim();
+  if (!supplement) {
+    showError("写下一点想补充的内容，再继续。");
+    return;
+  }
+  startConversationRound("supplement");
+  upsertUserHistory("supplement", supplement);
+  await requestFollowup({
+    loadingText: "正在顺着你补充的内容多问一句"
+  });
+}
+
+async function askForAnotherQuestion() {
+  startConversationRound("ask_more");
+  await requestFollowup({
+    loadingText: "正在换一个新角度问你"
+  });
 }
 
 async function rewriteDraft({ style = null, customRequest = null } = {}) {
@@ -328,7 +500,7 @@ async function rewriteDraft({ style = null, customRequest = null } = {}) {
     ...nextDraftState,
     revision_state: "awaiting_direction"
   };
-  renderDraft(result);
+  renderDraft(result, { resetStyle: false });
 }
 
 function finalizeDraft() {
@@ -357,6 +529,9 @@ function resetApp() {
     questionIntent: null,
     followUpAnswer: "",
     questionState: initialQuestionState(),
+    conversationHistory: [],
+    conversationRound: initialConversationRound(),
+    historyEntryCounter: 0,
     draftState: initialDraftState(),
     draft: null,
     lastRetry: null,
@@ -364,6 +539,7 @@ function resetApp() {
   });
   elements.memoryForm.reset();
   elements.answerForm.reset();
+  elements.supplementForm.reset();
   elements.customStyleForm.reset();
   elements.imagePreview.hidden = true;
   elements.imagePreview.removeAttribute("src");
@@ -419,16 +595,30 @@ elements.answerForm.addEventListener("submit", (event) => {
   event.preventDefault();
   const answer = elements.answerInput.value.trim();
   if (!answer) {
-    showError("写下一句话，或者选择“就这样收藏”。");
+    showError(
+      state.conversationRound.trigger === "initial"
+        ? "写下一句话，或者选择“就这样收藏”。"
+        : "写下一句话，或者选择“先这样更新”。"
+    );
     return;
   }
   composeMemory({ answer });
+});
+
+elements.supplementForm.addEventListener("submit", (event) => {
+  event.preventDefault();
+  submitSupplement();
 });
 
 elements.replaceQuestionButton.addEventListener("click", replaceQuestion);
 elements.composeNowButton.addEventListener("click", () =>
   composeMemory({ skipped: true })
 );
+elements.continueSupplementButton.addEventListener("click", () => {
+  elements.supplementInput.value = "";
+  showScreen("supplement");
+});
+elements.askMoreButton.addEventListener("click", askForAnotherQuestion);
 elements.keepDraftButton.addEventListener("click", finalizeDraft);
 elements.adjustStyleButton.addEventListener("click", () => showScreen("style"));
 elements.customStyleButton.addEventListener("click", () =>
@@ -455,15 +645,31 @@ elements.customStyleForm.addEventListener("submit", (event) => {
 });
 
 elements.headerBackButton.addEventListener("click", () => {
-  if (state.screen === "style" || state.screen === "custom") {
+  if (
+    state.screen === "style" ||
+    state.screen === "custom" ||
+    state.screen === "supplement"
+  ) {
     showScreen("draft", { remember: false });
     return;
   }
   if (state.screen === "question") {
+    if (state.conversationRound.trigger !== "initial") {
+      composeMemory({ skipped: true });
+      return;
+    }
+    state.conversationHistory = state.conversationHistory.filter(
+      (item) =>
+        !(
+          item.round === state.conversationRound.index &&
+          item.role === "assistant"
+        )
+    );
     state.question = null;
     state.questionIntent = null;
     state.followUpAnswer = "";
     state.questionState = initialQuestionState();
+    state.conversationRound = initialConversationRound();
     showScreen("input", { remember: false });
   }
 });

@@ -546,6 +546,43 @@ textarea:focus {
   margin-top: 28px;
 }
 
+.continuation-panel {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--panel-radius);
+  background: color-mix(in srgb, var(--accent-soft) 34%, var(--surface));
+}
+
+.continuation-panel h3 {
+  margin: 7px 0 0;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 680;
+  letter-spacing: -0.025em;
+}
+
+.continuation-panel > p:not(.section-kicker) {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.continuation-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 9px;
+  margin-top: 16px;
+}
+
+.continuation-actions .secondary-button {
+  min-height: 58px;
+  padding-inline: 10px;
+  font-size: 13px;
+  line-height: 1.35;
+}
+
 .memory-text {
   padding: 24px 22px;
   border: 1px solid var(--line);

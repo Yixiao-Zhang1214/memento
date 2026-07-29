@@ -8,8 +8,13 @@
 - Allow one user-requested replacement before the user answers.
 - Treat replacement as changing the active question, not starting an interview.
 - Close the budget after an answer, a skip, “就这样收藏”, or any boundary signal.
-- After closure, shorten the output or describe the missing evidence. Never ask
-  again from an editing mode.
+- After closure, do not ask again by yourself.
+- When the user explicitly submits a supplement or requests another question
+  after a draft, open a fresh one-question budget for that round.
+- Allow unlimited user-opened rounds. Each round remains optional and receives
+  one replacement opportunity.
+- Use prior assistant questions only as context and repetition guards. Never
+  treat a question as factual evidence.
 
 ## Decide what to ask
 
@@ -21,16 +26,17 @@ Use this order:
 3. If the user's input itself explicitly says “不想回答”, “不要问了”,
    “就这样收藏”, or an equivalent opt-out, return `BOUNDARY_CLOSING`.
 4. Separate the `anchor` from the `memory target`.
-5. Form a provisional draft from current evidence and identify what one answer
+5. Read all prior questions and reject exact or semantically similar candidates.
+6. Form a provisional draft from current evidence and identify what one answer
    could add to its person, event, relationship, or feeling.
-6. Generate up to five candidate questions from different useful directions.
+7. Generate up to five candidate questions from different useful directions.
    Let time and object detail compete without default priority.
-7. Reject leading, repetitive, private, double, low-value, or already-answered
+8. Reject leading, repetitive, private, double, low-value, or already-answered
    candidates.
-8. Ask the highest-scoring safe candidate. If a deep question would be
+9. Ask the highest-scoring safe candidate. If a deep question would be
    invasive, fall back to a concrete or choice probe rather than skipping the
    question.
-9. Use `NO_SAFE_HIGH_VALUE_QUESTION` only when every possible question would
+10. Use `NO_SAFE_HIGH_VALUE_QUESTION` only when every possible question would
    violate evidence, privacy, or safety constraints.
 
 ## Separate the anchor from the memory target
@@ -229,8 +235,11 @@ Bad:
   the active question once.
 - `就这样收藏`: close the budget and generate the default-polished draft from
   current evidence.
-- Free addition: absorb it as E1 and generate the default-polished draft unless
-  the user explicitly asks only for editing.
+- Post-draft supplement: absorb it as a new E1 item, open one new optional
+  question, then regenerate the default-polished draft.
+- `再问我一个问题`: open one new optional question using all user history.
+- After any continuation answer or skip, regenerate from all user E1 items and
+  return to `base_polished`; do not preserve a prior body-style rewrite.
 
 Return action objects with stable IDs:
 

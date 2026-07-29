@@ -160,7 +160,16 @@ export class MockModelClient {
       };
     }
 
-    const rawText = input.raw_text ?? "";
+    const conversationText = Array.isArray(input.conversation_history)
+      ? input.conversation_history
+          .filter((item) => item?.role === "user")
+          .map((item) => item.content)
+          .filter(Boolean)
+      : [];
+    const rawText =
+      conversationText.length > 0
+        ? conversationText.join("。")
+        : input.raw_text ?? "";
     if (purpose.startsWith("follow_up")) {
       const selected = chooseFollowup(
         rawText,
@@ -219,7 +228,10 @@ export class MockModelClient {
       };
     }
 
-    const copy = selectCopy(rawText, input.follow_up_answer ?? "");
+    const copy = selectCopy(
+      rawText,
+      conversationText.length > 0 ? "" : input.follow_up_answer ?? ""
+    );
     const ids = evidenceBindings(evidence);
     return {
       content: JSON.stringify({
@@ -248,6 +260,8 @@ export class MockModelClient {
           curator_note: ids
         },
         post_draft_actions: [
+          { id: "continue_supplement", label: "继续补充" },
+          { id: "ask_more", label: "再问我一个问题" },
           { id: "keep_draft", label: "就这样收藏" },
           { id: "adjust_style", label: "调整风格" },
           { id: "custom_style", label: "自定义风格" }

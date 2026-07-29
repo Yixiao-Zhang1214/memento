@@ -1,6 +1,6 @@
 ---
 name: memento-memory-editor
-description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text centered on the people, events, or feelings behind the object. Use one required-but-skippable tone-aware follow-up, a default-polished integrated draft, a short artistic source line, distinctive system-routed curator notes, and post-draft preset or custom style adjustment. Use when asked to follow an object into its memory, ask one fitting follow-up, compose or edit Memento text, preserve a user's voice, create a curator comment, customize prose style, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
+description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text centered on the people, events, or feelings behind the object. Use one required-but-skippable tone-aware follow-up per user-opened conversation round, a default-polished integrated draft, a short artistic source line, distinctive system-routed curator notes, post-draft continuation, and preset or custom style adjustment. Use when asked to follow an object into its memory, ask fitting non-repetitive follow-ups, continue a memory conversation, compose or edit Memento text, preserve a user's voice, create a curator comment, customize prose style, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
 ---
 
 # Memento Memory Editor
@@ -34,6 +34,9 @@ not automatically as the memory's subject.
 11. Keep post-draft body style independent from `source_line` and the
     system-selected curator lens.
 12. Never perform card rendering, visual layout, image export, or storage work.
+13. After a draft, never start another question by yourself. When the user
+    explicitly supplements the memory or asks for another question, open one new
+    skippable question round. Allow unlimited user-opened rounds.
 
 ## Route the request
 
@@ -87,7 +90,7 @@ Describe only observable signals in `tone_profile`: expression mode, emotional
 temperature, openness, and preferred question tone. Respect explicit boundary
 signals before considering information density.
 
-### 3. Apply the global question budget
+### 3. Apply the per-round question budget
 
 On a fresh memory, select and display one useful question even when the supplied
 facts are already sufficient to draft. First separate the object or image
@@ -98,7 +101,13 @@ answer. Give no default priority to time or object details. Reject questions
 whose answer is already implied by the input. Do not display a question only
 when the user has explicitly skipped, closed questioning, or already answered
 the current question. Allow one user-requested replacement before an answer; do
-not treat that as permission for a multi-round interview.
+not treat that as permission for an agent-initiated multi-round interview.
+
+After a draft, open another one-question budget only when the user explicitly
+submits a supplement or chooses to be asked again. Use the full user history,
+reject prior or semantically similar questions, and return to a newly integrated
+default-polished draft after the answer or skip. Each user-opened round gets one
+replacement and may be repeated without a product-defined round limit.
 
 ### 4. Generate the base draft
 
@@ -113,8 +122,9 @@ not treat that as permission for a multi-round interview.
 - Generate `source_line` separately. Prefer time + person + event; when time is
   missing, preserve an E1-supported person before the key line or action. Never
   infer a person or relationship.
-- Return `就这样收藏`, `调整风格`, and `自定义风格` after the draft. Do not ask
-  for style before the user has seen the integrated draft.
+- Return `继续补充`, `再问我一个问题`, `就这样收藏`, `调整风格`, and
+  `自定义风格` after the draft. Do not ask for style before the user has seen
+  the integrated draft.
 - Select the curator lens independently from the emotional route and evidence.
 
 ### 5. Adjust style only after the draft

@@ -122,7 +122,9 @@
                 <div class="question-panel">
                   <p class="section-kicker">馆员想多问一句</p>
                   <h2 id="questionText"></h2>
-                  <p class="question-note">可以简单回答，也可以直接收藏。</p>
+                  <p id="questionNote" class="question-note">
+                    可以简单回答，也可以直接收藏。
+                  </p>
                 </div>
 
                 <form id="answerForm" class="answer-form">
@@ -156,6 +158,34 @@
                 </div>
               </section>
 
+              <section id="supplementScreen" class="app-screen" hidden>
+                <div class="screen-intro">
+                  <p class="section-kicker">继续讲</p>
+                  <h2>再补充一点。</h2>
+                  <p>想到新的细节、人物或感受，都可以直接写下来。</p>
+                </div>
+
+                <form id="supplementForm" class="memory-form">
+                  <div class="field-block">
+                    <label for="supplementInput">
+                      还有什么想放进这段记忆？
+                    </label>
+                    <textarea
+                      id="supplementInput"
+                      rows="6"
+                      maxlength="5000"
+                      placeholder="想到什么就写什么"
+                    ></textarea>
+                    <p class="field-help">
+                      写入后，馆员会顺着这段新内容再问一句。
+                    </p>
+                  </div>
+                  <button class="primary-button" type="submit">
+                    写入并继续聊
+                  </button>
+                </form>
+              </section>
+
               <section id="draftScreen" class="app-screen" hidden>
                 <div class="screen-intro compact">
                   <p class="section-kicker">整理好了</p>
@@ -173,6 +203,30 @@
                     <p id="draftCurator"></p>
                   </aside>
                 </article>
+
+                <section class="continuation-panel" aria-labelledby="continue-title">
+                  <p class="section-kicker">还想再说一点？</p>
+                  <h3 id="continue-title">这版不是终点。</h3>
+                  <p>
+                    你可以主动补充，也可以让馆员换个角度问你。每次只问一句。
+                  </p>
+                  <div class="continuation-actions">
+                    <button
+                      id="continueSupplementButton"
+                      class="secondary-button"
+                      type="button"
+                    >
+                      继续补充
+                    </button>
+                    <button
+                      id="askMoreButton"
+                      class="secondary-button"
+                      type="button"
+                    >
+                      再问我一个问题
+                    </button>
+                  </div>
+                </section>
 
                 <div class="draft-actions">
                   <button

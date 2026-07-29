@@ -31,6 +31,18 @@ const STYLES = new Set([
   "dry_humor",
   "fantasy_archive"
 ]);
+const CONVERSATION_ROLES = new Set(["user", "assistant"]);
+const CONVERSATION_KINDS = new Set([
+  "initial",
+  "supplement",
+  "question",
+  "answer"
+]);
+const CONVERSATION_TRIGGERS = new Set([
+  "initial",
+  "supplement",
+  "ask_more"
+]);
 const PRIVATE_REFERENCE_NAMES = [
   "李娟",
   "岩井俊二",
@@ -132,6 +144,184 @@ function validateImage(image, maxImageBytes) {
   };
 }
 
+function normalizeConversationHistory(value) {
+  if (value == null) return [];
+  if (!Array.isArray(value)) {
+    throw new AppError({
+      code: "INVALID_INPUT",
+      message: "对话历史格式不正确。",
+      status: 400
+    });
+  }
+
+  const seenIds = new Set();
+  const history = [];
+  for (const item of value) {
+    if (!item || typeof item !== "object" || Array.isArray(item)) {
+      throw new AppError({
+        code: "INVALID_INPUT",
+        message: "对话历史包含无效项目。",
+        status: 400
+      });
+    }
+    const id = assertText(item.id, "对话项目 ID", 120);
+    const role = String(item.role ?? "");
+    const kind = String(item.kind ?? "");
+    const round = Number(item.round);
+    const content = assertText(item.content, "对话内容", 5_000);
+    if (!id || !content) {
+      throw new AppError({
+        code: "INVALID_INPUT",
+        message: "对话项目缺少 ID 或内容。",
+        status: 400
+      });
+    }
+    if (
+      !CONVERSATION_ROLES.has(role) ||
+      !CONVERSATION_KINDS.has(kind) ||
+      !Number.isInteger(round) ||
+      round < 0
+    ) {
+      throw new AppError({
+        code: "INVALID_INPUT",
+        message: "对话项目的角色、类型或轮次不正确。",
+        status: 400
+      });
+    }
+    const roleMatchesKind =
+      (role === "assistant" && kind === "question") ||
+      (role === "user" && kind !== "question");
+    if (!roleMatchesKind) {
+      throw new AppError({
+        code: "INVALID_INPUT",
+        message: "对话项目的角色与类型不一致。",
+        status: 400
+      });
+    }
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    history.push({ id, round, role, kind, content });
+  }
+  return history;
+}
+
+function normalizeConversationRound(value) {
+  const source =
+    value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const index = Number(source.index ?? 0);
+  const trigger = String(source.trigger ?? "initial");
+  if (
+    !Number.isInteger(index) ||
+    index < 0 ||
+    !CONVERSATION_TRIGGERS.has(trigger)
+  ) {
+    throw new AppError({
+      code: "INVALID_INPUT",
+      message: "当前对话轮次格式不正确。",
+      status: 400
+    });
+  }
+  return {
+    index,
+    trigger,
+    asked: source.asked === true,
+    replaced: source.replaced === true,
+    answered: source.answered === true,
+    closed: source.closed === true,
+    previous_intent:
+      typeof source.previous_intent === "string"
+        ? source.previous_intent.slice(0, 120)
+        : null
+  };
+}
+
+function conversationUserContents(input) {
+  return Array.isArray(input?.conversation_history)
+    ? input.conversation_history
+        .filter((item) => item?.role === "user")
+        .map((item) => item.content)
+        .filter(Boolean)
+    : [];
+}
+
+function allUserInputSegments(input) {
+  return [
+    ...conversationUserContents(input),
+    input?.raw_text,
+    input?.transcript_text,
+    input?.follow_up_answer
+  ]
+    .filter(Boolean)
+    .filter((content, index, values) => values.indexOf(content) === index);
+}
+
+function normalizeQuestionText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[，。！？、；：,.!?;:\s“”"'（）()]/g, "")
+    .replace(/你还记得|你能不能|可以说说|有没有|是什么|吗|呢/g, "");
+}
+
+function questionBigrams(value) {
+  const normalized = normalizeQuestionText(value);
+  if (normalized.length < 2) return new Set([normalized]);
+  const pairs = new Set();
+  for (let index = 0; index < normalized.length - 1; index += 1) {
+    pairs.add(normalized.slice(index, index + 2));
+  }
+  return pairs;
+}
+
+function questionsAreSimilar(first, second) {
+  const left = normalizeQuestionText(first);
+  const right = normalizeQuestionText(second);
+  if (!left || !right) return false;
+  if (left === right || left.includes(right) || right.includes(left)) return true;
+  const leftPairs = questionBigrams(left);
+  const rightPairs = questionBigrams(right);
+  let overlap = 0;
+  for (const pair of leftPairs) {
+    if (rightPairs.has(pair)) overlap += 1;
+  }
+  return (2 * overlap) / (leftPairs.size + rightPairs.size) >= 0.72;
+}
+
+function currentSupplement(input) {
+  if (input?.conversation_round?.trigger !== "supplement") return "";
+  return Array.isArray(input.conversation_history)
+    ? input.conversation_history
+        .filter(
+          (item) =>
+            item?.role === "user" &&
+            item?.kind === "supplement" &&
+            item?.round === input.conversation_round.index
+        )
+        .at(-1)?.content ?? ""
+    : "";
+}
+
+function questionFollowsSupplement(question, supplement) {
+  if (Array.from(supplement).length < 4) return true;
+  if (
+    /(刚补充|这件事|这次|当时|那天|那张|后来|说完|照片|合照)/.test(
+      question
+    )
+  ) {
+    return true;
+  }
+  const ignored = new Set(
+    Array.from("，。！？、；：,.!?;:（）()“”\"'的是了在我你他她它这那有和就也都很又把被给着过一个最时用")
+  );
+  const supplementCharacters = new Set(
+    Array.from(supplement).filter(
+      (character) => !ignored.has(character) && !/\s/.test(character)
+    )
+  );
+  return Array.from(question).some((character) =>
+    supplementCharacters.has(character)
+  );
+}
+
 export function normalizeInput(input, { maxImageBytes }) {
   if (!input || typeof input !== "object" || Array.isArray(input)) {
     throw new AppError({
@@ -166,6 +356,12 @@ export function normalizeInput(input, { maxImageBytes }) {
     input.rewrite_request,
     "改写要求",
     1_000
+  );
+  const conversationHistory = normalizeConversationHistory(
+    input.conversation_history
+  );
+  const conversationRound = normalizeConversationRound(
+    input.conversation_round
   );
 
   const visualEvidence = Array.isArray(input.visual_evidence)
@@ -226,6 +422,8 @@ export function normalizeInput(input, { maxImageBytes }) {
     follow_up_answer: followUpAnswer,
     user_skipped: Boolean(input.user_skipped),
     question_state: questionState,
+    conversation_history: conversationHistory,
+    conversation_round: conversationRound,
     style,
     draft_state: draftState,
     rewrite_request: rewriteRequest || null,
@@ -240,6 +438,7 @@ export function normalizeInput(input, { maxImageBytes }) {
   if (
     !rawText &&
     !transcriptText &&
+    conversationUserContents(normalized).length === 0 &&
     !normalized.image &&
     visualEvidence.length === 0 &&
     !existingText &&
@@ -412,8 +611,7 @@ export function validateFollowupOutput(output, { replaced = false } = {}) {
 export function validateFollowupRelevance(output, input = {}) {
   const question = String(output?.question ?? "");
   const supplied = [
-    input.raw_text,
-    input.transcript_text,
+    ...allUserInputSegments(input),
     ...(Array.isArray(input.visual_evidence) ? input.visual_evidence : [])
   ]
     .filter(Boolean)
@@ -441,29 +639,60 @@ export function validateFollowupRelevance(output, input = {}) {
     /(?:怎么|如何|有没有|是否).{0,8}(?:回答|回应|答应)|你.{0,8}(?:说了什么|答应了吗)/.test(
       question
     ) && /我说(?:好|可以|愿意)|我答应/.test(supplied);
+  const asksKnownAttachment =
+    /最舍不得.{0,12}(?:是什么|什么|哪一点|哪里)/.test(question) &&
+    /最舍不得.{0,24}(?:是|的就是|因为)/.test(supplied);
   const hasTextFirstTarget = /(关键词|口号|标语|一句话)/.test(supplied);
   const followsTextFirstTarget =
     /(关键词|口号|标语|这句话|为什么.{0,8}留|想.{0,8}留下)/.test(
       question
     );
+  const priorQuestions = Array.isArray(input.conversation_history)
+    ? input.conversation_history
+        .filter(
+          (item) => item?.role === "assistant" && item?.kind === "question"
+        )
+        .map((item) => item.content)
+    : [];
+  const repeatsHistory = priorQuestions.some((previous) =>
+    questionsAreSimilar(question, previous)
+  );
+  const supplement = currentSupplement(input);
+  const missesCurrentSupplement =
+    Boolean(supplement) && !questionFollowsSupplement(question, supplement);
 
   if (
     (asksWhen && alreadyHasTime) ||
     (asksReplacementReason && alreadyHasReplacementReason) ||
     asksKnownTravelNext ||
     asksKnownReply ||
-    (hasTextFirstTarget && !followsTextFirstTarget)
+    asksKnownAttachment ||
+    (hasTextFirstTarget && !followsTextFirstTarget) ||
+    missesCurrentSupplement ||
+    repeatsHistory
   ) {
-    const reason =
-      hasTextFirstTarget && !followsTextFirstTarget
-        ? "QUESTION_MISSES_TEXT_TARGET"
-        : "QUESTION_REPEATS_KNOWN_INFORMATION";
+    let reason = "QUESTION_REPEATS_KNOWN_INFORMATION";
+    if (repeatsHistory) {
+      reason = "QUESTION_REPEATS_HISTORY";
+    } else if (missesCurrentSupplement) {
+      reason = "QUESTION_MISSES_CURRENT_SUPPLEMENT";
+    } else if (hasTextFirstTarget && !followsTextFirstTarget) {
+      reason = "QUESTION_MISSES_TEXT_TARGET";
+    }
+    let message =
+      "追问重复了用户已经说明的信息。请换一个能为正文增加新内容的自然问题。";
+    if (reason === "QUESTION_REPEATS_HISTORY") {
+      message = "这个问题已经问过了。请换一个能增加新内容的角度。";
+    } else if (reason === "QUESTION_MISSES_CURRENT_SUPPLEMENT") {
+      message =
+        "这个问题没有顺着用户本轮刚补充的内容。请先围绕本轮新增的人、事或细节提问。";
+    } else if (reason === "QUESTION_MISSES_TEXT_TARGET") {
+      message =
+        "追问只停留在图片，没有跟随用户主动写下的内容。请围绕那句话或它背后的事情提问。";
+    }
     throw new AppError({
       code: "MODEL_OUTPUT_INVALID",
-      message:
-        reason === "QUESTION_MISSES_TEXT_TARGET"
-          ? "追问只停留在图片，没有跟随用户主动写下的内容。请围绕那句话或它背后的事情提问。"
-          : "追问重复了用户已经说明的信息。请换一个能为正文增加新内容的自然问题。",
+      message,
       status: 502,
       retryable: true,
       details: { reason }
@@ -543,9 +772,7 @@ export function validateComposeOutput(output) {
 
 export function validateComposeEvidence(output, input = {}) {
   const supplied = [
-    input.raw_text,
-    input.transcript_text,
-    input.follow_up_answer,
+    ...allUserInputSegments(input),
     ...(Array.isArray(input.visual_evidence) ? input.visual_evidence : [])
   ]
     .filter(Boolean)
@@ -577,9 +804,7 @@ export function validateComposeEvidence(output, input = {}) {
   }
 
   const sourceNarrative = [
-    input.raw_text,
-    input.transcript_text,
-    input.follow_up_answer
+    ...allUserInputSegments(input)
   ]
     .filter(Boolean)
     .join(" ");
@@ -648,10 +873,8 @@ export function validateComposeEvidence(output, input = {}) {
     )
   );
   const evidenceSegments = [
-    input.raw_text,
-    input.transcript_text,
-    input.follow_up_answer
-  ].filter(Boolean);
+    ...allUserInputSegments(input)
+  ];
   const missingSegment = evidenceSegments.find((segment) => {
     const meaningful = [
       ...new Set(
@@ -752,9 +975,7 @@ export function validateRewriteEvidence(output, input = {}) {
 
 export function validatePrivateReferenceNames(output, input) {
   const userSuppliedText = [
-    input.raw_text,
-    input.transcript_text,
-    input.follow_up_answer,
+    ...allUserInputSegments(input),
     input.rewrite_request,
     input.draft_state?.custom_style_request,
     input.existing_text

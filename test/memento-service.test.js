@@ -443,7 +443,267 @@ test("answering the follow-up generates the base polished draft", async () => {
   assert.equal(result.draft_stage, "base_polished");
   assert.match(result.story_text, /他抱了抱我/);
   assert.equal(result.source_line, "他的一句“愿不愿意”");
-  assert.equal(result.post_draft_actions.length, 3);
+  assert.deepEqual(
+    result.post_draft_actions.map((action) => action.id),
+    [
+      "continue_supplement",
+      "ask_more",
+      "keep_draft",
+      "adjust_style",
+      "custom_style"
+    ]
+  );
+});
+
+test("recurring composition keeps every user contribution but not assistant questions", async () => {
+  const { service } = await createService();
+  const result = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "compose_memory",
+      raw_text: "这是我用了六年的手机。",
+      conversation_history: [
+        {
+          id: "entry-1",
+          round: 0,
+          role: "user",
+          kind: "initial",
+          content: "这是我用了六年的手机，只有64G。"
+        },
+        {
+          id: "entry-2",
+          round: 0,
+          role: "assistant",
+          kind: "question",
+          content: "用了这么久，你最舍不得它的是什么？"
+        },
+        {
+          id: "entry-3",
+          round: 0,
+          role: "user",
+          kind: "answer",
+          content: "它一直很好用，只是我总在清内存。"
+        },
+        {
+          id: "entry-4",
+          round: 1,
+          role: "user",
+          kind: "supplement",
+          content: "如果一加还出直面屏，我可能就不会换苹果。"
+        },
+        {
+          id: "entry-5",
+          round: 1,
+          role: "assistant",
+          kind: "question",
+          content: "除了内存，它最好用的地方是什么？"
+        },
+        {
+          id: "entry-6",
+          round: 1,
+          role: "user",
+          kind: "answer",
+          content: "系统很顺手，握在手里也舒服。"
+        }
+      ],
+      conversation_round: {
+        index: 1,
+        trigger: "supplement",
+        asked: true,
+        replaced: false,
+        answered: true,
+        closed: true
+      },
+      question_state: {
+        asked: true,
+        replaced: false,
+        answered: true,
+        closed: true
+      }
+    },
+    "recurring-compose-test"
+  );
+
+  assert.match(result.story_text, /只有64G/);
+  assert.match(result.story_text, /总在清内存/);
+  assert.match(result.story_text, /不会换苹果/);
+  assert.match(result.story_text, /握在手里也舒服/);
+  assert.doesNotMatch(result.story_text, /最舍不得它的是什么/);
+  assert.doesNotMatch(result.story_text, /最好用的地方是什么/);
+  assert.equal(
+    result.evidence.filter((item) => item.level === "E1").length,
+    4
+  );
+});
+
+test("ask-more avoids a question already present in conversation history", async () => {
+  const { service, calls } = await createService();
+  const result = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "ask_followup",
+      raw_text: "这是我用了六年的手机，只有64G。",
+      conversation_history: [
+        {
+          id: "entry-1",
+          round: 0,
+          role: "user",
+          kind: "initial",
+          content: "这是我用了六年的手机，只有64G。"
+        },
+        {
+          id: "entry-2",
+          round: 0,
+          role: "assistant",
+          kind: "question",
+          content: "用了这么久，你最舍不得它的是什么？"
+        },
+        {
+          id: "entry-3",
+          round: 0,
+          role: "user",
+          kind: "answer",
+          content: "总是在清内存，但它确实很好用。"
+        }
+      ],
+      conversation_round: {
+        index: 1,
+        trigger: "ask_more",
+        asked: false,
+        replaced: false,
+        answered: false,
+        closed: false
+      },
+      question_state: {
+        asked: false,
+        replaced: false,
+        answered: false,
+        closed: false
+      }
+    },
+    "ask-more-dedupe-test"
+  );
+
+  assert.notEqual(
+    result.question,
+    "用了这么久，你最舍不得它的是什么？"
+  );
+  assert.equal(
+    result.question,
+    "这六年里，它有没有陪你经历一件一直记得的事？"
+  );
+  assert.equal(
+    calls.filter((call) => call.purpose.startsWith("follow_up")).length,
+    2
+  );
+});
+
+test("local fallback follows the current supplement before the broad object topic", async () => {
+  const config = loadConfig({ MEMENTO_MOCK_MODE: "true" });
+  const promptLoader = await new PromptLoader(config.skillDirectory).initialize();
+  const service = new MementoService({
+    config,
+    modelClient: {
+      async complete() {
+        throw new AppError({
+          code: "UPSTREAM_UNAVAILABLE",
+          message: "offline",
+          status: 503,
+          retryable: true
+        });
+      }
+    },
+    promptLoader,
+    logger: { info() {}, warn() {}, error() {} }
+  });
+
+  const result = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "ask_followup",
+      raw_text: "这是我用了六年的手机，只有64G。",
+      conversation_history: [
+        {
+          id: "entry-1",
+          round: 0,
+          role: "user",
+          kind: "initial",
+          content: "这是我用了六年的手机，只有64G。"
+        },
+        {
+          id: "entry-2",
+          round: 1,
+          role: "user",
+          kind: "supplement",
+          content: "大学毕业时，我用它拍了最后一张宿舍合照。"
+        }
+      ],
+      conversation_round: {
+        index: 1,
+        trigger: "supplement",
+        asked: false,
+        replaced: false,
+        answered: false,
+        closed: false
+      },
+      question_state: {
+        asked: false,
+        replaced: false,
+        answered: false,
+        closed: false
+      }
+    },
+    "supplement-first-fallback-test"
+  );
+
+  assert.equal(
+    result.question,
+    "拍下那张照片时，有没有一句话或一个动作你还记得？"
+  );
+});
+
+test("ten user-opened rounds remain available to the final composition", async () => {
+  const { service } = await createService();
+  const conversationHistory = Array.from({ length: 10 }, (_, index) => ({
+    id: `entry-${index + 1}`,
+    round: index,
+    role: "user",
+    kind: index === 0 ? "initial" : "supplement",
+    content: `第${index + 1}段记忆细节`
+  }));
+
+  const result = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "compose_memory",
+      raw_text: "第1段记忆细节",
+      conversation_history: conversationHistory,
+      conversation_round: {
+        index: 9,
+        trigger: "supplement",
+        asked: true,
+        replaced: false,
+        answered: false,
+        closed: true
+      },
+      user_skipped: true,
+      question_state: {
+        asked: true,
+        replaced: false,
+        answered: false,
+        closed: true
+      }
+    },
+    "ten-round-compose-test"
+  );
+
+  for (let index = 1; index <= 10; index += 1) {
+    assert.match(result.story_text, new RegExp(`第${index}段记忆细节`));
+  }
+  assert.equal(
+    result.evidence.filter((item) => item.level === "E1").length,
+    10
+  );
 });
 
 test("style rewrite changes only the body and preserves editorial fields", async () => {

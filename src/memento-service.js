@@ -34,6 +34,8 @@ const FALLBACK_ERROR_CODES = new Set([
 ]);
 const LOCAL_RECOVERY_REASONS = new Set([
   "QUESTION_REPEATS_KNOWN_INFORMATION",
+  "QUESTION_REPEATS_HISTORY",
+  "QUESTION_MISSES_CURRENT_SUPPLEMENT",
   "QUESTION_MISSES_TEXT_TARGET",
   "UNSUPPORTED_TIME_CLAIM",
   "UNSUPPORTED_NARRATIVE_EXPANSION",
@@ -61,11 +63,18 @@ function buildEvidence(input) {
   let e1 = 1;
   let e2 = 1;
 
-  for (const [source, content] of [
+  const conversationEvidence = input.conversation_history
+    .filter((item) => item.role === "user")
+    .map((item) => [`conversation.${item.kind}`, item.content]);
+  const legacyEvidence = [
     ["raw_text", input.raw_text],
     ["transcript_text", input.transcript_text],
     ["follow_up_answer", input.follow_up_answer]
-  ]) {
+  ];
+  const textEvidence =
+    conversationEvidence.length > 0 ? conversationEvidence : legacyEvidence;
+
+  for (const [source, content] of textEvidence) {
     if (!content) continue;
     evidence.push({
       id: `E1-${String(e1).padStart(2, "0")}`,
@@ -91,6 +100,47 @@ function buildEvidence(input) {
   return evidence;
 }
 
+function userNarrativeParts(input) {
+  const fromConversation = input.conversation_history
+    .filter((item) => item.role === "user")
+    .map((item) => item.content)
+    .filter(Boolean);
+  return fromConversation.length > 0
+    ? fromConversation
+    : [input.raw_text, input.transcript_text, input.follow_up_answer].filter(
+        Boolean
+      );
+}
+
+function previousQuestions(input) {
+  return input.conversation_history
+    .filter((item) => item.role === "assistant" && item.kind === "question")
+    .map((item) => item.content);
+}
+
+function currentRoundSupplement(input) {
+  return input.conversation_history
+    .filter(
+      (item) =>
+        item.role === "user" &&
+        item.kind === "supplement" &&
+        item.round === input.conversation_round.index
+    )
+    .at(-1)?.content;
+}
+
+function compactQuestion(value) {
+  return String(value ?? "").replace(/[，。！？、；：,.!?;:\s“”"']/g, "");
+}
+
+function chooseUnusedQuestion(input, intent, candidates) {
+  const used = new Set(previousQuestions(input).map(compactQuestion));
+  const question =
+    candidates.find((candidate) => !used.has(compactQuestion(candidate))) ??
+    "还有哪件前面没提过的事，你想补进这段记忆？";
+  return { intent, question };
+}
+
 function modelSafeInput(input, evidence) {
   const {
     image: _image,
@@ -111,6 +161,8 @@ function instructionFor(mode) {
       "执行 ask_followup。",
       "新记忆必须返回恰好一个自然、可跳过的追问。",
       "问题要追随物品背后的人、事情或感受，不要重复已知信息。",
+      "conversation_history 中 assistant 的 question 都是已经问过的问题，新问题不能与它们重复或换一种说法重复。",
+      "若 conversation_round.trigger 是 supplement，优先顺着本轮新增内容追问；若是 ask_more，换一个尚未涉及且能丰富文章的角度。",
       "返回前逐字对照 raw_text：已经写明的原因、时长、回答和下一步行动一律不能再问。",
       "例如，用户已写“因为内存不够”就不能问为什么换手机；已写“出差”就不能问接下来去做什么。",
       "严格使用 contract.md 的 Follow-up JSON 结构。"
@@ -136,50 +188,88 @@ function instructionFor(mode) {
 }
 
 function safeQuestionFor(input) {
-  const rawText = [input.raw_text, input.transcript_text]
-    .filter(Boolean)
-    .join(" ");
+  const rawText = userNarrativeParts(input).join(" ");
 
   if (input.question_state.replaced) {
-    return {
-      intent: "scene_probe",
-      question: "和它有关的事里，你现在最想记住哪一件？"
-    };
+    return chooseUnusedQuestion(input, "scene_probe", [
+      "和它有关的事里，你现在最想记住哪一件？",
+      "这段记忆里，还有谁应该被写进去？",
+      "有没有一句和它有关的话，你到现在还记得？"
+    ]);
+  }
+  const supplement = currentRoundSupplement(input);
+  if (input.conversation_round.trigger === "supplement" && supplement) {
+    if (/(毕业|宿舍|合照|照片|相册)/.test(supplement)) {
+      return chooseUnusedQuestion(input, "moment_probe", [
+        "拍下那张照片时，有没有一句话或一个动作你还记得？",
+        "那张照片里，谁站在你旁边？",
+        "后来你们有没有再一起看过那张照片？"
+      ]);
+    }
+    if (/(告白|表白|愿不愿意)/.test(supplement)) {
+      return chooseUnusedQuestion(input, "aftertrace_probe", [
+        "他说完那句话以后，你们做了什么？",
+        "那天还有哪个小动作，你到现在还记得？"
+      ]);
+    }
+    return chooseUnusedQuestion(input, "moment_probe", [
+      "你刚补充的这件事里，还有哪个细节最想留下？",
+      "这件事发生时，还有谁在场？",
+      "后来你有没有再和别人提起这件事？"
+    ]);
   }
   if (/(告白|表白|愿不愿意)/.test(rawText)) {
-    return {
-      intent: "aftertrace_probe",
-      question: "他说完那句话以后，你们做了什么？"
-    };
+    return chooseUnusedQuestion(input, "aftertrace_probe", [
+      "他说完那句话以后，你们做了什么？",
+      "那天还有哪个小动作，你到现在还记得？",
+      "后来你们第一次提起这次告白，是什么时候？"
+    ]);
   }
   if (/(小狗|比熊|送走)/.test(rawText)) {
-    return {
-      intent: "moment_probe",
-      question: "她在家的时候，有没有一件事你到现在还记得？"
-    };
+    return chooseUnusedQuestion(input, "moment_probe", [
+      "她在家的时候，有没有一件事你到现在还记得？",
+      "她有什么小习惯，是你现在还会想起的？",
+      "家里还有谁和她相处得最多？"
+    ]);
   }
   if (/(出差|又是)/.test(rawText)) {
-    return {
-      intent: "significance_probe",
-      question: "你写“又是出差的一天”时，是什么心情？"
-    };
+    return chooseUnusedQuestion(input, "significance_probe", [
+      "你写“又是出差的一天”时，是什么心情？",
+      "这次出差里，有没有一件事和以前不一样？",
+      "那段时间，你最常想起家里的什么？"
+    ]);
   }
   if (/(手机|内存|64G|容量)/i.test(rawText)) {
-    return {
-      intent: "significance_probe",
-      question: "用了这么久，你最舍不得它的是什么？"
-    };
+    const candidates = [
+      !/最舍不得.{0,24}(?:是|的就是|因为)/.test(rawText)
+        ? "用了这么久，你最舍不得它的是什么？"
+        : null,
+      "这六年里，它有没有陪你经历一件一直记得的事？",
+      "除了内存，它最好用的地方是什么？"
+    ].filter(Boolean);
+    return chooseUnusedQuestion(input, "significance_probe", candidates);
   }
   if (/(关键词|口号|标语|一句话)/.test(rawText)) {
-    return {
-      intent: "significance_probe",
-      question: "你为什么想把这句话留到现在？"
-    };
+    return chooseUnusedQuestion(input, "significance_probe", [
+      "你为什么想把这句话留到现在？",
+      "你第一次听到这句话时，正在经历什么？",
+      "这句话让你最先想到哪件具体的事？"
+    ]);
   }
-  return {
-    intent: "moment_probe",
-    question: "看到它时，你会先想起哪件事？"
-  };
+  return chooseUnusedQuestion(input, "moment_probe", [
+    "看到它时，你会先想起哪件事？",
+    "和它有关的人里，你最想先说谁？",
+    "它在你生活里最常出现在哪个时候？",
+    "有没有一句和它有关的话，你到现在还记得？",
+    "和它有关的日子里，哪一天最特别？",
+    "它有什么细节，是只有你会注意到的？",
+    "如果继续写，你最想补上哪件事？",
+    "这段记忆里，还有谁应该被写进去？",
+    "后来又发生了什么？",
+    "现在再看它，你最先想到什么变化？",
+    "你当时做过什么，现在还记得？",
+    "还有哪件前面没提过的事，你想补进这段记忆？"
+  ]);
 }
 
 function buildSafeFollowup(input, evidence) {
@@ -223,10 +313,9 @@ function sentenceJoin(parts) {
 }
 
 function safeCompositionCopy(input) {
-  const rawText = [input.raw_text, input.transcript_text]
-    .filter(Boolean)
-    .join("。");
-  const story = sentenceJoin([rawText, input.follow_up_answer]);
+  const narrativeParts = userNarrativeParts(input);
+  const rawText = narrativeParts.join("。");
+  const story = sentenceJoin(narrativeParts);
 
   if (/(告白|表白|愿不愿意)/.test(rawText)) {
     return {
@@ -300,9 +389,7 @@ function buildSafeComposition(input, evidence) {
     draft_stage: "base_polished",
     revision_state: "awaiting_direction",
     text_type:
-      input.raw_text || input.transcript_text || input.follow_up_answer
-        ? "story"
-        : "quiet",
+      userNarrativeParts(input).length > 0 ? "story" : "quiet",
     evidence,
     tone_profile: {
       expression_mode: "narrative",
@@ -328,6 +415,8 @@ function buildSafeComposition(input, evidence) {
       curator_note: evidenceIds
     },
     post_draft_actions: [
+      { id: "continue_supplement", label: "继续补充" },
+      { id: "ask_more", label: "再问我一个问题" },
       { id: "keep_draft", label: "就这样收藏" },
       { id: "adjust_style", label: "调整风格" },
       { id: "custom_style", label: "自定义风格" }
