@@ -41,10 +41,14 @@ export function loadConfig(env = process.env) {
       env.BIGMODEL_BASE_URL ?? "https://open.bigmodel.cn/api/paas/v4"
     ).replace(/\/+$/, ""),
     textModel: String(env.BIGMODEL_TEXT_MODEL ?? "glm-4.7-flash"),
+    textFallbackModel: String(
+      env.BIGMODEL_TEXT_FALLBACK_MODEL ?? "glm-4-flash-250414"
+    ).trim(),
     visionModel: String(env.BIGMODEL_VISION_MODEL ?? "glm-4.6v-flash"),
     port: parsePort(env.PORT),
     mockMode,
     requestTimeoutMs: 60_000,
+    primaryTextTimeoutMs: 15_000,
     maxImageBytes: 10 * 1024 * 1024,
     maxRequestBytes: 15 * 1024 * 1024,
     projectRoot,

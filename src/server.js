@@ -84,6 +84,7 @@ export function createHttpServer({ config, service, logger = console }) {
           ok: true,
           mode: config.mockMode ? "mock" : "live",
           text_model: config.textModel,
+          text_fallback_model: config.textFallbackModel,
           vision_model: config.visionModel
         });
         return;

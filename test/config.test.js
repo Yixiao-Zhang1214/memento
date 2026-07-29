@@ -13,6 +13,8 @@ test("mock mode starts without an API key and uses the confirmed models", () => 
   const config = loadConfig({ MEMENTO_MOCK_MODE: "true", PORT: "3100" });
   assert.equal(config.mockMode, true);
   assert.equal(config.textModel, "glm-4.7-flash");
+  assert.equal(config.textFallbackModel, "glm-4-flash-250414");
   assert.equal(config.visionModel, "glm-4.6v-flash");
+  assert.equal(config.primaryTextTimeoutMs, 15_000);
   assert.equal(config.port, 3100);
 });

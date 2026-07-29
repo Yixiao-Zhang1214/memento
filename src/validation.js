@@ -409,6 +409,58 @@ export function validateFollowupOutput(output, { replaced = false } = {}) {
   return output;
 }
 
+export function validateFollowupRelevance(output, input = {}) {
+  const question = String(output?.question ?? "");
+  const supplied = [
+    input.raw_text,
+    input.transcript_text,
+    ...(Array.isArray(input.visual_evidence) ? input.visual_evidence : [])
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  const asksWhen = /(什么时候|哪年|哪一年|多久|多少年|多长时间)/.test(
+    question
+  );
+  const alreadyHasTime =
+    /(?:\d+|[一二三四五六七八九十两半]+)\s*(?:年|个月|月|周|天)|(?:去年|前年|今年|大学时|上学时|刚工作|小时候)/.test(
+      supplied
+    );
+  const asksReplacementReason =
+    /(为什么|为何|什么原因|是什么让).*(?:换|不用|不再用|放弃|淘汰)|(?:换|不用|不再用|放弃|淘汰).*(为什么|为何|什么原因)/.test(
+      question
+    );
+  const alreadyHasReplacementReason =
+    /(?:因为|由于|原因是).{0,30}(?:内存|容量|空间|坏|摔|丢|不能用|不够)|(?:内存|容量|空间).{0,12}(?:不够|不足|满了)|没办法.{0,12}继续使用/.test(
+      supplied
+    );
+  const asksKnownTravelNext =
+    /(?:接下来|然后|之后).{0,10}(?:做什么|去哪|去哪里)/.test(question) &&
+    /出差/.test(supplied);
+  const asksKnownReply =
+    /(?:怎么|如何|有没有|是否).{0,8}(?:回答|回应|答应)|你.{0,8}(?:说了什么|答应了吗)/.test(
+      question
+    ) && /我说(?:好|可以|愿意)|我答应/.test(supplied);
+
+  if (
+    (asksWhen && alreadyHasTime) ||
+    (asksReplacementReason && alreadyHasReplacementReason) ||
+    asksKnownTravelNext ||
+    asksKnownReply
+  ) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message:
+        "追问重复了用户已经说明的信息。请换一个能为正文增加新内容的自然问题。",
+      status: 502,
+      retryable: true,
+      details: { reason: "QUESTION_REPEATS_KNOWN_INFORMATION" }
+    });
+  }
+
+  return output;
+}
+
 function assertStringField(output, field) {
   if (typeof output[field] !== "string" || output[field].trim() === "") {
     throw new AppError({
@@ -477,6 +529,101 @@ export function validateComposeOutput(output) {
   return output;
 }
 
+export function validateComposeEvidence(output, input = {}) {
+  const supplied = [
+    input.raw_text,
+    input.transcript_text,
+    input.follow_up_answer,
+    ...(Array.isArray(input.visual_evidence) ? input.visual_evidence : [])
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const generated = [
+    output.title,
+    output.source_line,
+    output.summary,
+    output.story_text,
+    output.curator_note
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const timeClaims =
+    generated.match(/(?:19|20)\d{2}年|去年|前年|今年|上个月|下个月/g) ?? [];
+  const unsupported = timeClaims.find((claim) => !supplied.includes(claim));
+
+  if (unsupported) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "成稿加入了用户没有提供的时间。请删除该时间，不要推算年份。",
+      status: 502,
+      retryable: true,
+      details: {
+        reason: "UNSUPPORTED_TIME_CLAIM",
+        claim: unsupported
+      }
+    });
+  }
+
+  const sourceNarrative = [
+    input.raw_text,
+    input.transcript_text,
+    input.follow_up_answer
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const sourceLength = Array.from(sourceNarrative).length;
+  const storyLength = Array.from(output.story_text ?? "").length;
+  const maximumPolishLength = Math.max(80, Math.ceil(sourceLength * 1.45));
+
+  if (sourceLength > 0 && storyLength > maximumPolishLength) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message:
+        "默认润色显著扩写了用户原文。请只整合、去重和调整语序，不要补充新的经历或感受。",
+      status: 502,
+      retryable: true,
+      details: { reason: "UNSUPPORTED_NARRATIVE_EXPANSION" }
+    });
+  }
+
+  const unsupportedNarrativeClaims = [
+    "难忘",
+    "我怀念",
+    "向前看",
+    "生活的一部分",
+    "不仅仅是",
+    "承载着",
+    "承载了",
+    "见证了",
+    "教会我",
+    "让我明白",
+    "陪我度过",
+    "流畅运行",
+    "手机的性能",
+    "通讯工具"
+  ];
+  const unsupportedClaim = unsupportedNarrativeClaims.find(
+    (claim) =>
+      String(output.story_text ?? "").includes(claim) &&
+      !sourceNarrative.includes(claim)
+  );
+  if (unsupportedClaim) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message:
+        "默认润色加入了用户没有表达的经历、情绪或意义。请删除这些内容，只保留用户提供的事实。",
+      status: 502,
+      retryable: true,
+      details: {
+        reason: "UNSUPPORTED_NARRATIVE_CLAIM",
+        claim: unsupportedClaim
+      }
+    });
+  }
+
+  return output;
+}
+
 export function validateRewriteOutput(output) {
   assertBaseOutput(output, "rewrite_text");
   assertStringField(output, "rewritten_text");
@@ -491,6 +638,57 @@ export function validateRewriteOutput(output) {
       retryable: true
     });
   }
+  return output;
+}
+
+export function validateRewriteEvidence(output, input = {}) {
+  const currentDraft = input.current_draft ?? {};
+  const currentStory = String(currentDraft.story_text ?? "");
+  const currentCorpus = [
+    currentDraft.title,
+    currentDraft.source_line,
+    currentDraft.summary,
+    currentDraft.story_text,
+    currentDraft.curator_note
+  ]
+    .filter(Boolean)
+    .join(" ");
+
+  validateComposeEvidence(
+    {
+      ...currentDraft,
+      story_text: output.rewritten_text
+    },
+    {
+      raw_text: currentCorpus,
+      transcript_text: "",
+      follow_up_answer: "",
+      visual_evidence: []
+    }
+  );
+
+  const customRequest = [
+    input.rewrite_request,
+    input.draft_state?.custom_style_request
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const permitsSecondPerson = /第二人称|改成你|用你来写/.test(customRequest);
+  if (
+    currentStory.includes("我") &&
+    !output.rewritten_text.includes("我") &&
+    output.rewritten_text.includes("你") &&
+    !permitsSecondPerson
+  ) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "风格调整改变了正文的人称。请保留原来的叙述者。",
+      status: 502,
+      retryable: true,
+      details: { reason: "UNSUPPORTED_VOICE_SHIFT" }
+    });
+  }
+
   return output;
 }
 

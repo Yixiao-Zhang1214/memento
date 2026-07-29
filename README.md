@@ -14,6 +14,8 @@
 
 - `glm-4.6v-flash`：只提取图片中的可见事实；
 - `glm-4.7-flash`：负责追问、正文、来源和馆员评语。
+- `glm-4-flash-250414`：仅在主文字模型限流、过载或超时时临时接管文字任务。
+- 如果两个模型连续生成重复或不合约的追问，服务端会返回一条本地安全追问，不把模型错误暴露给用户。
 
 浏览器只访问本项目的 Node.js 服务。智谱 API Key 不会发送到浏览器。
 
@@ -47,6 +49,7 @@ http://127.0.0.1:3000
 BIGMODEL_API_KEY=你的_API_Key
 BIGMODEL_BASE_URL=https://open.bigmodel.cn/api/paas/v4
 BIGMODEL_TEXT_MODEL=glm-4.7-flash
+BIGMODEL_TEXT_FALLBACK_MODEL=glm-4-flash-250414
 BIGMODEL_VISION_MODEL=glm-4.6v-flash
 PORT=3000
 MEMENTO_MOCK_MODE=false

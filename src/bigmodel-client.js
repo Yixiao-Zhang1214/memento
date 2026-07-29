@@ -70,7 +70,9 @@ export class BigModelClient {
     thinking,
     temperature,
     maxTokens,
-    responseFormat
+    responseFormat,
+    timeoutMs = this.timeoutMs,
+    maxAttempts = 2
   }) {
     const body = {
       model,
@@ -86,9 +88,9 @@ export class BigModelClient {
     }
 
     let lastError;
-    for (let attempt = 0; attempt < 2; attempt += 1) {
+    for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), this.timeoutMs);
+      const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
       try {
         const response = await this.fetchImpl(
@@ -106,7 +108,10 @@ export class BigModelClient {
 
         if (!response.ok) {
           lastError = mapUpstreamError(response.status);
-          if (attempt === 0 && RETRYABLE_STATUS.has(response.status)) {
+          if (
+            attempt < maxAttempts - 1 &&
+            RETRYABLE_STATUS.has(response.status)
+          ) {
             await wait(retryDelayMs(response));
             continue;
           }
@@ -157,7 +162,7 @@ export class BigModelClient {
           cause: error
         });
 
-        if (attempt === 0) {
+        if (attempt < maxAttempts - 1) {
           await wait(250);
           continue;
         }

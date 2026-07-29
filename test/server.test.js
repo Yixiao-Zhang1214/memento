@@ -23,6 +23,7 @@ test("mock server serves the prototype and reports model configuration", async (
     ok: true,
     mode: "mock",
     text_model: "glm-4.7-flash",
+    text_fallback_model: "glm-4-flash-250414",
     vision_model: "glm-4.6v-flash"
   });
 
