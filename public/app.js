@@ -34,7 +34,6 @@ const elements = {
   draftTitle: document.querySelector("#draftTitle"),
   draftSummary: document.querySelector("#draftSummary"),
   draftStory: document.querySelector("#draftStory"),
-  draftCurator: document.querySelector("#draftCurator"),
   continueSupplementButton: document.querySelector(
     "#continueSupplementButton"
   ),
@@ -337,7 +336,6 @@ function renderDraft(draft, { resetStyle = true } = {}) {
   elements.draftTitle.textContent = draft.title;
   elements.draftSummary.textContent = draft.summary;
   elements.draftStory.textContent = draft.story_text;
-  elements.draftCurator.textContent = draft.curator_note;
   showScreen("draft");
 }
 
@@ -503,13 +501,29 @@ async function rewriteDraft({ style = null, customRequest = null } = {}) {
   renderDraft(result, { resetStyle: false });
 }
 
-function finalizeDraft() {
+async function finalizeDraft() {
   if (!state.draft) return;
-  elements.finalTitle.textContent = state.draft.title;
-  elements.finalSource.textContent = state.draft.source_line;
-  elements.finalStory.textContent = state.draft.story_text;
-  elements.finalCurator.textContent = state.draft.curator_note;
-  state.draftState.revision_state = "finalized";
+  const nextDraftState = {
+    ...state.draftState,
+    revision_state: "finalized"
+  };
+  const run = () => finalizeDraft();
+  const result = await apiRequest(
+    {
+      ...basePayload(),
+      mode: "finalize_memory",
+      current_draft: state.draft,
+      draft_state: nextDraftState
+    },
+    { loadingText: "馆员正在写下最后一句", retry: run }
+  );
+  if (!result) return;
+  state.draft = result;
+  state.draftState = nextDraftState;
+  elements.finalTitle.textContent = result.title;
+  elements.finalSource.textContent = result.source_line;
+  elements.finalStory.textContent = result.story_text;
+  elements.finalCurator.textContent = result.curator_note;
   showScreen("final");
 }
 

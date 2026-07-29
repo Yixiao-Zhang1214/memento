@@ -148,6 +148,66 @@ function styleFeatures(input) {
   return map[input.style] ?? ["默认润色"];
 }
 
+function curatorCandidate(rawText, hasVisualEvidence) {
+  if (
+    /(去世|离世|过世|生前|再也见不到|不在人世|悲伤|很难过|难过得|痛苦)/.test(
+      rawText
+    )
+  ) {
+    return {
+      route: "grief_loss",
+      text: /(手表|表带|腕表)/.test(rawText)
+        ? "人已经走了，手表还替他占着位置。"
+        : "人不在了，留下的东西还照常在。",
+      lens: "ordinary_absence"
+    };
+  }
+  if (/(告白|表白|愿不愿意|在一起了)/.test(rawText)) {
+    return {
+      route: "first_heartbeat",
+      text: /我说好|答应|说了好/.test(rawText)
+        ? "一个“好”字，让花有了后半生。"
+        : "那句话很短，两个人却从那里开始。",
+      lens: "small_action_consequence"
+    };
+  }
+  if (/(送走|分手|告别|遗憾|错过|离开了)/.test(rawText)) {
+    return {
+      route: "regret_parting",
+      text: /(小狗|比熊|狗)/.test(rawText)
+        ? "她被送走了，记忆却还在原地等她。"
+        : "告别已经发生，没说完的话还留着。",
+      lens: /(小狗|比熊|狗)/.test(rawText)
+        ? "kept_vs_gone"
+        : "unsaid_tension"
+    };
+  }
+  if (/(手机|64G|内存|六年|6年)/i.test(rawText)) {
+    return {
+      route: "nostalgia_change",
+      text:
+        /(64G|64g)/.test(rawText) && /(六年|6年)/.test(rawText)
+          ? "64G装不下后来，倒装得下六年。"
+          : "东西旧得很慢，日子却已经走远了。",
+      lens: "material_time"
+    };
+  }
+  if (/(出差|馄饨|早餐)/.test(rawText)) {
+    return {
+      route: "neutral_sparse",
+      text: "早餐只管好吃，“又”字负责出差。",
+      lens: "exact_object_observation"
+    };
+  }
+  return {
+    route: "neutral_sparse",
+    text: hasVisualEvidence
+      ? "照片没有解释，只把眼前这一刻留下。"
+      : "这句话很短，留下的意思却很具体。",
+    lens: "exact_object_observation"
+  };
+}
+
 export class MockModelClient {
   async complete({ purpose, input = {}, evidence = [] }) {
     if (purpose.startsWith("vision")) {
@@ -228,6 +288,30 @@ export class MockModelClient {
       };
     }
 
+    if (purpose.startsWith("curator")) {
+      const selected = curatorCandidate(
+        rawText,
+        evidence.some((item) => item.level === "E2")
+      );
+      return {
+        content: JSON.stringify({
+          contract_version: "1.1",
+          status: "complete",
+          mode: "finalize_memory",
+          emotion_route: selected.route,
+          candidates: [
+            {
+              text: selected.text,
+              lens_id: selected.lens,
+              evidence_ids: evidenceBindings(evidence)
+            }
+          ]
+        }),
+        upstreamRequestId: "mock-curator",
+        usage: null
+      };
+    }
+
     const copy = selectCopy(
       rawText,
       conversationText.length > 0 ? "" : input.follow_up_answer ?? ""
@@ -247,17 +331,14 @@ export class MockModelClient {
         source_line: copy.source,
         summary: copy.summary,
         story_text: copy.story,
-        curator_note: copy.note,
-        curator_profile: {
-          emotion_route: copy.route,
-          lens_id: copy.lens
-        },
+        curator_note: null,
+        curator_profile: null,
         evidence_bindings: {
           title: ids,
           source_line: ids,
           summary: ids,
           story_text: ids,
-          curator_note: ids
+          curator_note: []
         },
         post_draft_actions: [
           { id: "continue_supplement", label: "继续补充" },

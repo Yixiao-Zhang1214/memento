@@ -15,6 +15,7 @@ CONTRACT_VERSION = "1.1"
 MODES = {
     "ask_followup",
     "compose_memory",
+    "finalize_memory",
     "polish_text",
     "expand_text",
     "optimization_options",
@@ -57,6 +58,51 @@ CURATOR_ROUTES = {
     "endurance_afterward",
     "neutral_sparse",
 }
+CURATOR_MOVES = {
+    "object_role",
+    "factual_contrast",
+    "small_action_consequence",
+    "kept_vs_gone",
+    "material_time",
+    "unsaid_tension",
+    "shared_complicity",
+    "ordinary_absence",
+    "limit_and_continuance",
+    "exact_object_observation",
+}
+ROUTE_MOVES = {
+    "tender_daily": {"object_role", "small_action_consequence"},
+    "first_heartbeat": {"small_action_consequence", "object_role"},
+    "intimate_tension": {"factual_contrast", "unsaid_tension"},
+    "family_old_days": {"object_role", "material_time"},
+    "friendship_complicity": {"shared_complicity", "small_action_consequence"},
+    "bright_delight": {"factual_contrast", "small_action_consequence"},
+    "absurd_self_mockery": {"factual_contrast", "object_role"},
+    "nostalgia_change": {"material_time", "kept_vs_gone"},
+    "regret_parting": {"kept_vs_gone", "unsaid_tension"},
+    "grief_loss": {"ordinary_absence", "kept_vs_gone"},
+    "endurance_afterward": {"limit_and_continuance", "object_role"},
+    "neutral_sparse": {"exact_object_observation", "object_role"},
+}
+PRIVATE_REFERENCE_NAMES = {
+    "李娟",
+    "岩井俊二",
+    "张爱玲",
+    "汪曾祺",
+    "三毛",
+    "丰子恺",
+    "王小波",
+    "贾樟柯",
+    "白先勇",
+    "余华",
+    "史铁生",
+    "阿城",
+}
+GENERIC_CURATOR_RE = re.compile(
+    r"(值得.{0,4}珍藏|见证.{0,4}成长|平凡中.{0,4}不平凡|"
+    r"这就是.{0,4}模样|承载着.{0,8}回忆|岁月的见证|"
+    r"珍贵的回忆|永远留在|生活的一部分)"
+)
 TONE_ENUMS = {
     "expression_mode": {"terse", "fragmented", "narrative", "playful", "literary"},
     "emotional_temperature": {"light", "neutral", "tender", "heavy", "guarded"},
@@ -208,7 +254,6 @@ def validate_compose(
         "source_line": (4, 18),
         "summary": (12, 36),
         "story_text": (30, 260),
-        "curator_note": (8, 80),
     }
     values: dict[str, str] = {}
     for field, (soft_min, soft_max) in fields.items():
@@ -219,32 +264,47 @@ def validate_compose(
             warnings.append(
                 f"{field}: length {length} outside recommended {soft_min}-{soft_max}"
             )
-    note = values.get("curator_note", "")
-    if note:
-        segments = [part for part in SENTENCE_END_RE.split(note) if part.strip()]
-        if len(segments) > 1:
+    if data.get("curator_note") is not None:
+        errors.append("curator_note: must be null while draft is editable")
+    if data.get("curator_profile") is not None:
+        errors.append("curator_profile: must be null while draft is editable")
+    validate_draft_state(data, errors)
+    validate_bindings(data, ids, errors)
+
+
+def validate_finalize(data: dict[str, Any], errors: list[str]) -> None:
+    ids = evidence_ids(data, errors)
+    validate_tone_profile(data, errors)
+    validate_audit(data, errors)
+    for field in ("title", "source_line", "summary", "story_text", "curator_note"):
+        require_string(data, field, errors)
+
+    note = data.get("curator_note", "")
+    if isinstance(note, str):
+        length = chinese_length(note)
+        if not 8 <= length <= 25:
+            errors.append("curator_note: must contain 8-25 Unicode characters")
+        if len(SENTENCE_END_RE.findall(note)) > 1:
             errors.append("curator_note: must be one sentence")
-    curator_profile = data.get("curator_profile")
-    if not isinstance(curator_profile, dict):
+        if any(name in note for name in PRIVATE_REFERENCE_NAMES):
+            errors.append("curator_note: must not expose the reference person")
+        if GENERIC_CURATOR_RE.search(note):
+            errors.append("curator_note: generic curator wording is not allowed")
+
+    profile = data.get("curator_profile")
+    if not isinstance(profile, dict):
         errors.append("curator_profile: expected object")
     else:
-        route = curator_profile.get("emotion_route")
+        route = profile.get("emotion_route")
+        lens_id = profile.get("lens_id")
         if route not in CURATOR_ROUTES:
             errors.append(f"curator_profile.emotion_route: invalid value {route!r}")
-        lens_id = curator_profile.get("lens_id")
-        if not isinstance(lens_id, str) or not lens_id.strip():
-            errors.append("curator_profile.lens_id: expected non-empty string")
-        for private_field in (
-            "reference_person",
-            "author",
-            "inspired_by",
-            "style_imitation",
-        ):
-            if private_field in curator_profile:
-                errors.append(
-                    f"curator_profile.{private_field}: private routing metadata "
-                    "must not be exposed"
-                )
+        if lens_id not in CURATOR_MOVES:
+            errors.append(f"curator_profile.lens_id: invalid value {lens_id!r}")
+        elif route in CURATOR_ROUTES and lens_id not in ROUTE_MOVES[route]:
+            errors.append(
+                "curator_profile.lens_id: observation move does not match route"
+            )
         tone = data.get("tone_profile")
         if (
             isinstance(tone, dict)
@@ -255,8 +315,16 @@ def validate_compose(
                 "curator_profile.emotion_route: must match "
                 "tone_profile.curator_emotion_route"
             )
+
     validate_draft_state(data, errors)
     validate_bindings(data, ids, errors)
+    bindings = data.get("evidence_bindings")
+    if (
+        isinstance(bindings, dict)
+        and isinstance(bindings.get("curator_note"), list)
+        and not bindings["curator_note"]
+    ):
+        errors.append("evidence_bindings.curator_note: must not be empty")
 
 
 def validate_draft_state(data: dict[str, Any], errors: list[str]) -> None:
@@ -391,6 +459,8 @@ def validate(data: Any) -> dict[str, Any]:
         validate_question(data, errors)
     elif mode == "compose_memory":
         validate_compose(data, errors, warnings)
+    elif mode == "finalize_memory":
+        validate_finalize(data, errors)
     elif mode in {"polish_text", "expand_text", "rewrite_text"}:
         validate_edit_mode(data, mode, errors)
     elif mode == "optimization_options":

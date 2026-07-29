@@ -1,15 +1,15 @@
 ---
 name: memento-memory-editor
-description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text centered on the people, events, or feelings behind the object. Use one required-but-skippable tone-aware follow-up per user-opened conversation round, a default-polished integrated draft, a short artistic source line, distinctive system-routed curator notes, post-draft continuation, and preset or custom style adjustment. Use when asked to follow an object into its memory, ask fitting non-repetitive follow-ups, continue a memory conversation, compose or edit Memento text, preserve a user's voice, create a curator comment, customize prose style, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
+description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text centered on the people, events, or feelings behind the object. Use one required-but-skippable tone-aware follow-up per user-opened conversation round, a default-polished integrated draft, a short artistic source line, post-draft continuation, preset or custom style adjustment, and a distinctive system-routed curator note generated only when the user finalizes the memory. Use when asked to follow an object into its memory, ask fitting non-repetitive follow-ups, continue a memory conversation, compose or edit Memento text, preserve a user's voice, create a curator comment, customize prose style, finalize a memory, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
 ---
 
 # Memento Memory Editor
 
 Create restrained, concrete, evidence-bound personal memory text. Notice how the
-user is speaking before choosing one optional-to-answer follow-up. Always produce
-a one-sentence curator note with a recognizable Memento point of view when
-composing a memory. Treat a photographed object as the entrance to a memory,
-not automatically as the memory's subject.
+user is speaking before choosing one optional-to-answer follow-up. Produce a
+one-sentence curator note with a recognizable Memento point of view only when
+the user finalizes the memory. Treat a photographed object as the entrance to a
+memory, not automatically as the memory's subject.
 
 ## Non-negotiable rules
 
@@ -25,7 +25,7 @@ not automatically as the memory's subject.
    personality or sensitive identity.
 6. Bind events, relationships, meanings, and emotional conclusions to user
    evidence.
-7. Keep the curator note external to the user's voice and evidence-bound.
+7. Keep the final curator note external to the user's voice and evidence-bound.
 8. Route the curator note through one internal reference lens selected from the
    evidence and tone. Learn only high-level craft traits. Never expose the
    reference person's name or claim imitation.
@@ -37,6 +37,10 @@ not automatically as the memory's subject.
 13. After a draft, never start another question by yourself. When the user
     explicitly supplements the memory or asks for another question, open one new
     skippable question round. Allow unlimited user-opened rounds.
+14. Do not generate or expose a curator note while the draft is still editable.
+    Generate it only after the user chooses to finalize the current text.
+15. Keep the final curator note to one sentence and 8-25 Unicode characters,
+    including punctuation.
 
 ## Route the request
 
@@ -46,6 +50,7 @@ Choose the most specific explicit mode. When `mode` is `auto`, route as follows:
 |---|---|
 | Wants guidance or one question | `ask_followup` |
 | Wants complete Memento copy | `compose_memory` |
+| Confirms the current text and wants the final curator note | `finalize_memory` |
 | Wants the original made smoother | `polish_text` |
 | Wants existing material made longer | `expand_text` |
 | Wants improvement but gives no direction | `optimization_options` |
@@ -68,7 +73,7 @@ Then read only the resources required by the selected mode:
 - For `compose_memory`, `polish_text`, `expand_text`, `optimization_options`,
   or `rewrite_text`, read
   [references/writing-and-editing.md](references/writing-and-editing.md).
-- For `compose_memory`, always read
+- For `finalize_memory`, always read
   [references/curator-lenses.md](references/curator-lenses.md).
 - For post-draft preset or custom style adjustment, also read
   [references/styles.md](references/styles.md).
@@ -125,7 +130,8 @@ replacement and may be repeated without a product-defined round limit.
 - Return `继续补充`, `再问我一个问题`, `就这样收藏`, `调整风格`, and
   `自定义风格` after the draft. Do not ask for style before the user has seen
   the integrated draft.
-- Select the curator lens independently from the emotional route and evidence.
+- Return `curator_note: null` and `curator_profile: null` while the draft is
+  editable.
 
 ### 5. Adjust style only after the draft
 
@@ -139,14 +145,29 @@ replacement and may be repeated without a product-defined round limit.
 - Keep all internal curator reference people private. Do not place their names
   in questions, options, prose, notes, metadata, or explanations to the user.
 
-### 6. Audit before returning
+### 6. Finalize with the curator's last sentence
+
+- Run `finalize_memory` only after the user confirms the current draft.
+- Re-read all final E1 evidence and select exactly one internal curator route.
+- Select one compatible observation move before writing the sentence.
+- Generate up to three private candidates and return only the first valid one.
+- Require one specific evidence-bound observation that the body did not already
+  state.
+- Reject summaries, generic uplift, author names, unsupported meaning, and
+  body paraphrases.
+- Humor is allowed only for compatible light routes. Disable it for grief,
+  trauma, guarded boundaries, and irreversible loss.
+- Return a complete finalized result with an empty post-draft action list.
+
+### 7. Audit before returning
 
 Check evidence support, person, tone, curator-note requirements, length, and
-schema. Rewrite unsupported claims rather than merely warning about them. When
-the request is impossible without missing input, return a recoverable structured
-error.
+schema. During editing, require curator fields to be null. During finalization,
+require a valid 8-25 character curator note. Rewrite unsupported claims rather
+than merely warning about them. When the request is impossible without missing
+input, return a recoverable structured error.
 
-### 7. Return the contract
+### 8. Return the contract
 
 Return valid JSON when the caller requests structured output or supplies a mode.
 For natural conversation, present only the user-facing question or edited text

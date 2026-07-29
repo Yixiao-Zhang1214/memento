@@ -17,6 +17,7 @@ Input modes:
 - `auto`
 - `ask_followup`
 - `compose_memory`
+- `finalize_memory`
 - `polish_text`
 - `expand_text`
 - `optimization_options`
@@ -196,11 +197,8 @@ When the user has already answered or explicitly skipped, set `status` to
   "source_line": "",
   "summary": "",
   "story_text": "",
-  "curator_note": "",
-  "curator_profile": {
-    "emotion_route": "neutral_sparse",
-    "lens_id": "object_first_observation"
-  },
+  "curator_note": null,
+  "curator_profile": null,
   "evidence_bindings": {
     "title": [],
     "source_line": [],
@@ -243,20 +241,75 @@ For the first integrated result, use `draft_stage: "base_polished"` and
 Set `status` to `needs_user_input` because the user may keep or adjust it.
 The user may also supplement the memory or explicitly open another question
 round. These actions do not permit the system to start a new question by itself.
+While `revision_state` is `awaiting_direction`, return `curator_note: null` and
+`curator_profile: null`. Do not generate a provisional curator note.
 
 For a preset or custom rewrite, use `draft_stage: "restyled"` and keep
 `revision_state: "awaiting_direction"` until the user chooses `keep_draft`.
-When the user keeps the current draft, set `status: "complete"`,
-`revision_state: "finalized"`, and return an empty `post_draft_actions` array.
+When the user keeps the current draft, call `finalize_memory`. Set
+`status: "complete"`, `revision_state: "finalized"`, and return an empty
+`post_draft_actions` array.
 
 `source_line` is required, should be 4-18 Chinese characters, and must remain
 independent from body style. Prefer time + E1-supported person + event. If time
 is absent, preserve the E1-supported person before a key line or action. If no
 person is supported, use the object or event without inventing a relationship.
 
+### Finalize memory
+
+Require `current_draft`, final user evidence, and any reused visual evidence.
+Finalization has a private candidate phase followed by the public final result.
+
+For the private candidate phase, return:
+
+```json
+{
+  "contract_version": "1.1",
+  "status": "complete",
+  "mode": "finalize_memory",
+  "emotion_route": "first_heartbeat",
+  "candidates": [
+    {
+      "text": "一个“好”字，让花有了后半生。",
+      "lens_id": "small_action_consequence",
+      "evidence_ids": ["E1-01"]
+    }
+  ]
+}
+```
+
+Return one to three candidates. The service validates them and selects the first
+valid candidate. Candidate lists are private runtime data and must never appear
+in the public response.
+
+The public final result returns the final title, source line, summary, and story
+unchanged, plus:
+
+```json
+{
+  "contract_version": "1.1",
+  "status": "complete",
+  "mode": "finalize_memory",
+  "revision_state": "finalized",
+  "curator_note": "一个“好”字，让花有了后半生。",
+  "curator_profile": {
+    "emotion_route": "first_heartbeat",
+    "lens_id": "small_action_consequence"
+  },
+  "evidence_bindings": {
+    "curator_note": ["E1-01"]
+  },
+  "post_draft_actions": []
+}
+```
+
+The curator note must be one sentence and 8-25 Unicode characters including
+punctuation. It must bind to at least one supplied evidence ID, use one allowed
+observation move, and add an observation rather than summarize the body.
+
 `curator_profile` is public-safe metadata. Never include a reference person's
-name or fields such as `reference_person`, `author`, `inspired_by`, or
-`style_imitation`.
+name, private candidates, or fields such as `reference_person`, `author`,
+`inspired_by`, or `style_imitation`.
 
 ### Post-draft style selection
 

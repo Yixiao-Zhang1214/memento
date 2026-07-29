@@ -3,7 +3,10 @@ import assert from "node:assert/strict";
 import {
   normalizeInput,
   parseJsonContent,
+  validateCuratorCandidates,
   validateComposeEvidence,
+  validateComposeOutput,
+  validateFinalizedMemory,
   validateFollowupRelevance,
   validatePrivateReferenceNames,
   validateRewriteEvidence,
@@ -122,6 +125,136 @@ test("an internal curator reference cannot appear unless the user supplied it", 
         }
       ),
     (error) => error.code === "MODEL_OUTPUT_INVALID"
+  );
+});
+
+test("an editable draft cannot expose a curator note", () => {
+  assert.throws(
+    () =>
+      validateComposeOutput({
+        contract_version: "1.1",
+        status: "needs_user_input",
+        mode: "compose_memory",
+        draft_stage: "base_polished",
+        revision_state: "awaiting_direction",
+        title: "告白那天的花",
+        source_line: "一句愿不愿意",
+        summary: "一束花留下两个人关系开始的那天。",
+        story_text: "他问我愿不愿意做他女朋友，我说好。",
+        curator_note: "一个好字，让花有了后半生。",
+        curator_profile: null,
+        evidence: [],
+        evidence_bindings: { curator_note: [] },
+        post_draft_actions: [
+          { id: "continue_supplement" },
+          { id: "ask_more" },
+          { id: "keep_draft" },
+          { id: "adjust_style" },
+          { id: "custom_style" }
+        ]
+      }),
+    (error) =>
+      error.code === "MODEL_OUTPUT_INVALID" &&
+      error.details?.reason === "CURATOR_GENERATED_BEFORE_FINALIZATION"
+  );
+});
+
+test("curator quality gate skips generic candidates and selects a specific one", () => {
+  const selected = validateCuratorCandidates(
+    {
+      contract_version: "1.1",
+      status: "complete",
+      mode: "finalize_memory",
+      emotion_route: "first_heartbeat",
+      candidates: [
+        {
+          text: "这是一段值得永远珍藏的回忆。",
+          lens_id: "object_role",
+          evidence_ids: ["E1-01"]
+        },
+        {
+          text: "一个“好”字，让花有了后半生。",
+          lens_id: "small_action_consequence",
+          evidence_ids: ["E1-01"]
+        }
+      ]
+    },
+    {
+      evidence: [{ id: "E1-01" }],
+      currentDraft: {
+        story_text: "他问我愿不愿意做他女朋友，我说好。"
+      }
+    }
+  );
+
+  assert.equal(
+    selected.selected_candidate.text,
+    "一个“好”字，让花有了后半生。"
+  );
+});
+
+test("curator quality gate rejects long, repeated, and mismatched candidates", () => {
+  assert.throws(
+    () =>
+      validateCuratorCandidates(
+        {
+          contract_version: "1.1",
+          status: "complete",
+          mode: "finalize_memory",
+          emotion_route: "grief_loss",
+          candidates: [
+            {
+              text:
+                "爸爸去世后我把这块手表留了下来因为这是爸爸戴了很多年的手表。",
+              lens_id: "factual_contrast",
+              evidence_ids: ["E1-01"]
+            }
+          ]
+        },
+        {
+          evidence: [{ id: "E1-01" }],
+          currentDraft: {
+            story_text: "爸爸去世后，我把这块手表留了下来。"
+          }
+        }
+      ),
+    (error) =>
+      error.code === "MODEL_OUTPUT_INVALID" &&
+      error.details?.candidate_reasons?.length === 1
+  );
+});
+
+test("finalized memory cannot change the confirmed draft", () => {
+  const draft = {
+    title: "告白那天的花",
+    source_line: "一句愿不愿意",
+    summary: "一束花留下两个人关系开始的那天。",
+    story_text: "他问我愿不愿意做他女朋友，我说好。"
+  };
+  assert.throws(
+    () =>
+      validateFinalizedMemory(
+        {
+          contract_version: "1.1",
+          status: "complete",
+          mode: "finalize_memory",
+          revision_state: "finalized",
+          ...draft,
+          story_text: `${draft.story_text}后来下起了雨。`,
+          curator_note: "一个“好”字，让花有了后半生。",
+          curator_profile: {
+            emotion_route: "first_heartbeat",
+            lens_id: "small_action_consequence"
+          },
+          evidence: [{ id: "E1-01" }],
+          evidence_bindings: { curator_note: ["E1-01"] },
+          post_draft_actions: []
+        },
+        { current_draft: draft }
+      ),
+    (error) =>
+      error.code === "MODEL_OUTPUT_INVALID" &&
+      error.details?.reason === "FINALIZATION_CHANGED_DRAFT"
   );
 });
 

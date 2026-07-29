@@ -745,6 +745,7 @@ test("style rewrite changes only the body and preserves editorial fields", async
   assert.equal(restyled.title, base.title);
   assert.equal(restyled.source_line, base.source_line);
   assert.equal(restyled.curator_note, base.curator_note);
+  assert.equal(restyled.curator_note, null);
 });
 
 test("rate-limited style rewrite uses a meaning-preserving local adjustment", async () => {
@@ -771,15 +772,30 @@ test("rate-limited style rewrite uses a meaning-preserving local adjustment", as
     contract_version: "1.1",
     status: "needs_user_input",
     mode: "compose_memory",
+    draft_stage: "base_polished",
+    revision_state: "awaiting_direction",
     title: "64G的六年",
     source_line: "我和它的六年",
     summary: "一部依然好用的旧手机。",
     story_text:
       "这部手机很好用，但内存真的不够。如果一加还出直面屏手机，我可能就不会换苹果了。",
-    curator_note: "生活比64G长得更快。",
+    curator_note: null,
+    curator_profile: null,
     evidence: [],
-    evidence_bindings: {},
-    post_draft_actions: [],
+    evidence_bindings: {
+      title: [],
+      source_line: [],
+      summary: [],
+      story_text: [],
+      curator_note: []
+    },
+    post_draft_actions: [
+      { id: "continue_supplement", label: "继续补充" },
+      { id: "ask_more", label: "再问我一个问题" },
+      { id: "keep_draft", label: "就这样收藏" },
+      { id: "adjust_style", label: "调整风格" },
+      { id: "custom_style", label: "自定义风格" }
+    ],
     audit: { passed: true, unsupported_claims: [], warnings: [] }
   };
 
@@ -805,6 +821,173 @@ test("rate-limited style rewrite uses a meaning-preserving local adjustment", as
   assert.doesNotMatch(result.story_text, /不会选择离开苹果/);
   assert.match(result.story_text, /\n/);
   assert.equal(result.runtime?.model_used, "local-editorial-fallback");
+});
+
+test("curator note is generated only when the user finalizes the draft", async () => {
+  const { service, calls } = await createService();
+  const input = {
+    contract_version: "1.1",
+    raw_text:
+      "这是男朋友告白那天送的花。他问我愿不愿意做我女朋友，我说好。",
+    conversation_history: [
+      {
+        id: "entry-1",
+        round: 0,
+        role: "user",
+        kind: "initial",
+        content:
+          "这是男朋友告白那天送的花。他问我愿不愿意做我女朋友，我说好。"
+      }
+    ],
+    question_state: {
+      asked: true,
+      replaced: false,
+      answered: false,
+      closed: true
+    }
+  };
+  const draft = await service.process(
+    { ...input, mode: "compose_memory", user_skipped: true },
+    "draft-before-finalize"
+  );
+
+  assert.equal(draft.curator_note, null);
+  assert.equal(draft.curator_profile, null);
+
+  const finalized = await service.process(
+    {
+      ...input,
+      mode: "finalize_memory",
+      current_draft: draft,
+      draft_state: {
+        base_draft_generated: true,
+        revision_state: "finalized"
+      }
+    },
+    "finalize-memory"
+  );
+
+  assert.equal(finalized.mode, "finalize_memory");
+  assert.equal(finalized.status, "complete");
+  assert.equal(finalized.revision_state, "finalized");
+  assert.equal(finalized.story_text, draft.story_text);
+  assert.equal(finalized.title, draft.title);
+  assert.equal(finalized.curator_note, "一个“好”字，让花有了后半生。");
+  assert.ok(Array.from(finalized.curator_note).length <= 25);
+  assert.deepEqual(finalized.post_draft_actions, []);
+  assert.doesNotMatch(
+    JSON.stringify(finalized),
+    /candidates|selected_candidate|李娟|岩井俊二|余华/
+  );
+  assert.equal(
+    calls.filter((call) => call.purpose === "curator").length,
+    1
+  );
+});
+
+test("final curator route is reassessed from all supplied conversation evidence", async () => {
+  const { service } = await createService();
+  const conversationHistory = [
+    {
+      id: "entry-1",
+      round: 0,
+      role: "user",
+      kind: "initial",
+      content: "这是爸爸戴了很多年的手表。"
+    },
+    {
+      id: "entry-2",
+      round: 1,
+      role: "user",
+      kind: "supplement",
+      content: "爸爸去世后，我把它留了下来。"
+    }
+  ];
+  const shared = {
+    contract_version: "1.1",
+    raw_text: "这是爸爸戴了很多年的手表。",
+    conversation_history: conversationHistory,
+    conversation_round: {
+      index: 1,
+      trigger: "supplement",
+      asked: true,
+      replaced: false,
+      answered: false,
+      closed: true
+    },
+    question_state: {
+      asked: true,
+      replaced: false,
+      answered: false,
+      closed: true
+    }
+  };
+  const draft = await service.process(
+    { ...shared, mode: "compose_memory", user_skipped: true },
+    "grief-draft"
+  );
+  const finalized = await service.process(
+    { ...shared, mode: "finalize_memory", current_draft: draft },
+    "grief-final"
+  );
+
+  assert.equal(finalized.curator_profile.emotion_route, "grief_loss");
+  assert.equal(finalized.curator_note, "人已经走了，手表还替他占着位置。");
+});
+
+test("two unavailable models still produce a dynamic evidence-bound curator note", async () => {
+  const { service: composingService } = await createService();
+  const rawText =
+    "这是我用了6年的手机，只有64G，总是在清内存，但它一直很好用。";
+  const draft = await composingService.process(
+    {
+      contract_version: "1.1",
+      mode: "compose_memory",
+      raw_text: rawText,
+      user_skipped: true,
+      question_state: {
+        asked: true,
+        replaced: false,
+        answered: false,
+        closed: true
+      }
+    },
+    "phone-draft"
+  );
+
+  const config = loadConfig({ MEMENTO_MOCK_MODE: "true" });
+  const promptLoader = await new PromptLoader(config.skillDirectory).initialize();
+  let calls = 0;
+  const failingService = new MementoService({
+    config,
+    modelClient: {
+      async complete() {
+        calls += 1;
+        throw new AppError({
+          code: "UPSTREAM_RATE_LIMITED",
+          message: "busy",
+          status: 503,
+          retryable: true
+        });
+      }
+    },
+    promptLoader,
+    logger: { info() {}, warn() {}, error() {} }
+  });
+  const finalized = await failingService.process(
+    {
+      contract_version: "1.1",
+      mode: "finalize_memory",
+      raw_text: rawText,
+      current_draft: draft
+    },
+    "local-curator"
+  );
+
+  assert.equal(calls, 2);
+  assert.equal(finalized.curator_note, "64G装不下后来，倒装得下六年。");
+  assert.equal(finalized.curator_profile.emotion_route, "nostalgia_change");
+  assert.equal(finalized.runtime.model_used, "local-editorial-fallback");
 });
 
 test("composed mock output passes the Skill contract validator", async () => {
@@ -835,6 +1018,49 @@ test("composed mock output passes the Skill contract validator", async () => {
     );
     const { stdout } = await execFileAsync("python3", [validator, fixturePath]);
     assert.match(stdout, /valid/i);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("finalized mock output passes the Skill contract validator", async () => {
+  const { service } = await createService();
+  const rawText =
+    "这是我用了6年的手机，只有64G，总是在清内存，但它一直很好用。";
+  const draft = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "compose_memory",
+      raw_text: rawText,
+      user_skipped: true,
+      question_state: {
+        asked: true,
+        replaced: false,
+        answered: false,
+        closed: true
+      }
+    },
+    "final-contract-draft"
+  );
+  const result = await service.process(
+    {
+      contract_version: "1.1",
+      mode: "finalize_memory",
+      raw_text: rawText,
+      current_draft: draft
+    },
+    "final-contract-result"
+  );
+  const directory = await mkdtemp(path.join(tmpdir(), "memento-final-contract-"));
+  const fixturePath = path.join(directory, "output.json");
+  await writeFile(fixturePath, JSON.stringify(result), "utf8");
+
+  try {
+    const validator = path.resolve(
+      "skills/memento-memory-editor/scripts/validate_output.py"
+    );
+    const { stdout } = await execFileAsync("python3", [validator, fixturePath]);
+    assert.match(stdout, /"valid": true/);
   } finally {
     await rm(directory, { recursive: true, force: true });
   }

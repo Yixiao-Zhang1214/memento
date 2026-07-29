@@ -2,8 +2,10 @@ import { AppError } from "./errors.js";
 import {
   normalizeInput,
   parseJsonContent,
+  validateCuratorCandidates,
   validateComposeEvidence,
   validateComposeOutput,
+  validateFinalizedMemory,
   validateFollowupOutput,
   validateFollowupRelevance,
   validatePrivateReferenceNames,
@@ -41,7 +43,19 @@ const LOCAL_RECOVERY_REASONS = new Set([
   "UNSUPPORTED_NARRATIVE_EXPANSION",
   "UNSUPPORTED_NARRATIVE_CLAIM",
   "INSUFFICIENT_EVIDENCE_COVERAGE",
-  "UNSUPPORTED_VOICE_SHIFT"
+  "UNSUPPORTED_VOICE_SHIFT",
+  "CURATOR_GENERATED_BEFORE_FINALIZATION",
+  "CURATOR_ROUTE_INVALID",
+  "CURATOR_CANDIDATES_MISSING",
+  "CURATOR_CANDIDATE_INVALID",
+  "CURATOR_LENGTH_INVALID",
+  "CURATOR_MULTIPLE_SENTENCES",
+  "CURATOR_PRIVATE_REFERENCE",
+  "CURATOR_GENERIC",
+  "CURATOR_REPEATS_BODY",
+  "CURATOR_ROUTE_MOVE_MISMATCH",
+  "CURATOR_EVIDENCE_INVALID",
+  "CURATOR_HUMOR_UNSAFE"
 ]);
 const VISUAL_METADATA_FALLBACK = "用户上传了一张图片";
 const MODEL_COOLDOWN_MS = 60_000;
@@ -172,8 +186,19 @@ function instructionFor(mode) {
     return [
       "执行 compose_memory。",
       "整合全部用户输入，先生成 default_polish 成稿。",
-      "不得新增事实，必须包含短来源和一句馆员评语。",
+      "不得新增事实，必须包含短来源。",
+      "这是仍可编辑的草稿：curator_note 和 curator_profile 必须为 null，evidence_bindings.curator_note 必须为空数组。",
       "严格使用 contract.md 的 Composed memory JSON 结构。"
+    ].join("\n");
+  }
+  if (mode === "finalize_memory") {
+    return [
+      "执行 finalize_memory。用户已经确认 current_draft，绝对不要改动标题、来源、摘要和正文。",
+      "根据全部对话和视觉证据重新选择最终情绪路线，再使用该路线允许的观察动作。",
+      "返回 1 到 3 个内部候选；每个候选只写一句 8–25 字的馆员评语，并绑定真实 evidence id。",
+      "评语必须有具体观察或转折，不能复述正文、不能套用珍藏/成长/岁月见证等通用句。",
+      "内部参考人物只用于调度，候选文本和字段中都不得出现人物姓名。",
+      "严格使用 contract.md 的 Finalize memory candidate JSON 结构。"
     ].join("\n");
   }
   if (mode === "rewrite_text") {
@@ -323,9 +348,7 @@ function safeCompositionCopy(input) {
       source: "他的一句“愿不愿意”",
       summary: "一束花和一句话，留下了两个人关系开始的那天。",
       story,
-      note: "这束花替一个冒险的问题壮了胆，又被一个“好”留到了现在。",
-      route: "first_heartbeat",
-      lens: "clean_first_moment"
+      route: "first_heartbeat"
     };
   }
   if (/(小狗|比熊|送走)/.test(rawText)) {
@@ -334,9 +357,7 @@ function safeCompositionCopy(input) {
       source: "她住在家里的时候",
       summary: "关于一只曾经住进家里，后来又离开的小狗。",
       story,
-      note: "记不清时间并没有让她消失，能被说出的那件小事才是她留下的地方。",
-      route: "regret_parting",
-      lens: "residual_everyday_image"
+      route: "regret_parting"
     };
   }
   if (/(手机|内存|64G|容量)/i.test(rawText)) {
@@ -345,9 +366,7 @@ function safeCompositionCopy(input) {
       source: "我和它的六年",
       summary: "一部依然好用，却装不下后来生活的旧手机。",
       story,
-      note: "它用了六年都没有变得难用，只是你的生活比64G长得更快。",
-      route: "nostalgia_change",
-      lens: "change_through_use"
+      route: "nostalgia_change"
     };
   }
   if (/(出差|馄饨|早餐)/.test(rawText)) {
@@ -356,9 +375,7 @@ function safeCompositionCopy(input) {
       source: "出差日的早餐",
       summary: "一顿还不错的早餐，夹在又一次出差的开头。",
       story,
-      note: "早餐只负责好吃，那个“又”字才替这一天留下了重量。",
-      route: "neutral_sparse",
-      lens: "small_word_observation"
+      route: "neutral_sparse"
     };
   }
 
@@ -373,9 +390,7 @@ function safeCompositionCopy(input) {
     source: "为它留下的这一页",
     summary: "从一件眼前的东西，留下一段愿意记住的话。",
     story: story || visualStory || "这件东西被留在了这里。",
-    note: "它没有替你解释什么，只把你愿意留下的部分放在了这里。",
-    route: "neutral_sparse",
-    lens: "object_first_observation"
+    route: "neutral_sparse"
   };
 }
 
@@ -402,17 +417,14 @@ function buildSafeComposition(input, evidence) {
     source_line: copy.source,
     summary: copy.summary,
     story_text: copy.story,
-    curator_note: copy.note,
-    curator_profile: {
-      emotion_route: copy.route,
-      lens_id: copy.lens
-    },
+    curator_note: null,
+    curator_profile: null,
     evidence_bindings: {
       title: evidenceIds,
       source_line: evidenceIds,
       summary: evidenceIds,
       story_text: evidenceIds,
-      curator_note: evidenceIds
+      curator_note: []
     },
     post_draft_actions: [
       { id: "continue_supplement", label: "继续补充" },
@@ -430,6 +442,133 @@ function buildSafeComposition(input, evidence) {
       model_used: "local-editorial-fallback",
       fallback_used: true
     }
+  };
+}
+
+function selectCuratorRoute(input) {
+  const text = [
+    ...userNarrativeParts(input),
+    input.current_draft?.story_text
+  ]
+    .filter(Boolean)
+    .join("。");
+  if (
+    /(去世|离世|过世|生前|再也见不到|不在人世|悲伤|很难过|难过得|痛苦)/.test(
+      text
+    )
+  ) {
+    return "grief_loss";
+  }
+  if (/(告白|表白|愿不愿意|第一次心动|在一起了)/.test(text)) {
+    return "first_heartbeat";
+  }
+  if (/(送走|分手|告别|没来得及|遗憾|错过|离开了)/.test(text)) {
+    return "regret_parting";
+  }
+  if (/(撑过|熬过|坚持|病痛|困难|还得继续|扛着)/.test(text)) {
+    return "endurance_afterward";
+  }
+  if (/(爸爸|妈妈|父亲|母亲|爷爷|奶奶|外公|外婆|家里人)/.test(text)) {
+    return "family_old_days";
+  }
+  if (/(朋友|室友|同学|我们几个|一起胡闹)/.test(text)) {
+    return /(离谱|好笑|哈哈|吐槽|荒唐|丑)/.test(text)
+      ? "absurd_self_mockery"
+      : "friendship_complicity";
+  }
+  if (/(吵架|冷战|没说出口|关系|恋人|男朋友|女朋友)/.test(text)) {
+    return "intimate_tension";
+  }
+  if (/(手机|旧|多年|六年|6年|64G|内存|换掉|以前|后来)/i.test(text)) {
+    return "nostalgia_change";
+  }
+  if (/(好开心|高兴|惊喜|庆祝|太好了|快乐)/.test(text)) {
+    return "bright_delight";
+  }
+  if (/(好笑|哈哈|吐槽|荒唐|离谱|审美|居然)/.test(text)) {
+    return "absurd_self_mockery";
+  }
+  if (/(温柔|抱了抱|照顾|陪着|日常|每天)/.test(text)) {
+    return "tender_daily";
+  }
+  return "neutral_sparse";
+}
+
+function safeCuratorCopy(input, route) {
+  const text = [
+    ...userNarrativeParts(input),
+    input.current_draft?.story_text
+  ]
+    .filter(Boolean)
+    .join("。");
+  if (route === "first_heartbeat") {
+    return /我说好|答应|说了好/.test(text)
+      ? ["一个“好”字，让花有了后半生。", "small_action_consequence"]
+      : ["那句话很短，两个人却从那里开始。", "small_action_consequence"];
+  }
+  if (route === "grief_loss") {
+    return /(手表|表带|腕表)/.test(text)
+      ? ["人已经走了，手表还替他占着位置。", "ordinary_absence"]
+      : ["人不在了，留下的东西还照常在。", "ordinary_absence"];
+  }
+  if (route === "regret_parting") {
+    return /(小狗|比熊|狗)/.test(text)
+      ? ["她被送走了，记忆却还在原地等她。", "kept_vs_gone"]
+      : ["告别已经发生，没说完的话还留着。", "unsaid_tension"];
+  }
+  if (route === "endurance_afterward") {
+    return ["难处留在身上，人还是往前走了。", "limit_and_continuance"];
+  }
+  if (route === "family_old_days") {
+    return ["东西没有开口，家里的日子先回来了。", "object_role"];
+  }
+  if (route === "friendship_complicity") {
+    return ["东西只留一件，默契倒是两个人的。", "shared_complicity"];
+  }
+  if (route === "intimate_tension") {
+    return ["话没有说满，关系却已经听见了。", "unsaid_tension"];
+  }
+  if (route === "bright_delight") {
+    return ["事情很小，高兴却一点也不肯小。", "factual_contrast"];
+  }
+  if (route === "absurd_self_mockery") {
+    return /(三年|3年).*(丑|审美)|(丑|审美).*(三年|3年)/.test(text)
+      ? ["审美输得彻底，三年就是证据。", "factual_contrast"]
+      : ["东西没替你争气，倒替你留下了笑话。", "object_role"];
+  }
+  if (route === "nostalgia_change") {
+    if (/(64G|64g)/.test(text) && /(六年|6年)/.test(text)) {
+      return ["64G装不下后来，倒装得下六年。", "material_time"];
+    }
+    return ["东西旧得很慢，日子却已经走远了。", "material_time"];
+  }
+  if (route === "tender_daily") {
+    return ["它只是待在那里，日子就软了一点。", "object_role"];
+  }
+  if (/(出差|馄饨|早餐)/.test(text)) {
+    return ["早餐只管好吃，“又”字负责出差。", "exact_object_observation"];
+  }
+  return input.image || input.visual_evidence.length > 0
+    ? ["照片没有解释，只把眼前这一刻留下。", "exact_object_observation"]
+    : ["这句话很短，留下的意思却很具体。", "exact_object_observation"];
+}
+
+function buildSafeCurator(input, evidence) {
+  const route = selectCuratorRoute(input);
+  const [text, lensId] = safeCuratorCopy(input, route);
+  const evidenceIds = evidence.map((item) => item.id);
+  return {
+    contract_version: "1.1",
+    status: "complete",
+    mode: "finalize_memory",
+    emotion_route: route,
+    candidates: [
+      {
+        text,
+        lens_id: lensId,
+        evidence_ids: evidenceIds.length > 0 ? evidenceIds : ["E1-01"]
+      }
+    ]
   };
 }
 
@@ -531,8 +670,8 @@ export class MementoService {
       }
     }
 
-    const evidence = buildEvidence(input);
     const mode = this.selectMode(input);
+    const evidence = buildEvidence(input);
 
     if (mode === "ask_followup") {
       return this.generateFollowup(input, evidence, requestId);
@@ -542,6 +681,9 @@ export class MementoService {
     }
     if (mode === "rewrite_text") {
       return this.rewrite(input, evidence, requestId);
+    }
+    if (mode === "finalize_memory") {
+      return this.finalize(input, evidence, requestId);
     }
 
     throw new AppError({
@@ -553,6 +695,7 @@ export class MementoService {
 
   selectMode(input) {
     if (input.mode === "rewrite_text") return "rewrite_text";
+    if (input.mode === "finalize_memory") return "finalize_memory";
     if (input.mode === "compose_memory") return "compose_memory";
     if (input.mode === "ask_followup") return "ask_followup";
     if (input.mode !== "auto") return input.mode;
@@ -689,6 +832,68 @@ export class MementoService {
     return validateComposeOutput(merged);
   }
 
+  async finalize(input, evidence, requestId) {
+    if (!input.current_draft) {
+      throw new AppError({
+        code: "MISSING_SOURCE_TEXT",
+        message: "收藏前需要先生成一版正文。",
+        status: 400
+      });
+    }
+    validateComposeOutput(input.current_draft);
+
+    const mode = "finalize_memory";
+    const messages = this.buildTextMessages(mode, input, evidence);
+    const curator = await this.runJsonWithRepair({
+      purpose: "curator",
+      model: this.config.textModel,
+      messages,
+      parameters: TEXT_PARAMETERS,
+      input,
+      evidence,
+      validate: (output) =>
+        validateCuratorCandidates(output, {
+          evidence,
+          currentDraft: input.current_draft
+        }),
+      requestId
+    });
+    const selected = curator.selected_candidate;
+    const finalized = {
+      ...input.current_draft,
+      status: "complete",
+      mode: "finalize_memory",
+      revision_state: "finalized",
+      evidence,
+      tone_profile: {
+        ...input.current_draft.tone_profile,
+        curator_emotion_route: curator.emotion_route
+      },
+      curator_note: selected.text,
+      curator_profile: {
+        emotion_route: curator.emotion_route,
+        lens_id: selected.lens_id
+      },
+      evidence_bindings: {
+        ...input.current_draft.evidence_bindings,
+        curator_note: selected.evidence_ids
+      },
+      post_draft_actions: [],
+      audit: {
+        passed: true,
+        unsupported_claims: [],
+        warnings: curator.runtime?.fallback_used
+          ? ["馆员模型未通过最终校验，已使用本地动态评语。"]
+          : []
+      },
+      runtime: curator.runtime
+    };
+    return validateComposeEvidence(
+      validateFinalizedMemory(finalized, input),
+      input
+    );
+  }
+
   buildTextMessages(mode, input, evidence) {
     const system = this.promptLoader.buildSystemPrompt(mode);
     const payload = modelSafeInput(input, evidence);
@@ -752,7 +957,7 @@ export class MementoService {
             LOCAL_RECOVERY_REASONS.has(error.details?.reason);
           if (
             shouldRecoverLocally &&
-            ["follow_up", "compose", "rewrite"].includes(purpose)
+            ["follow_up", "compose", "rewrite", "curator"].includes(purpose)
           ) {
             break;
           }
@@ -766,11 +971,15 @@ export class MementoService {
             ];
             continue;
           }
-          if (["follow_up", "compose", "rewrite"].includes(purpose)) break;
+          if (
+            ["follow_up", "compose", "rewrite", "curator"].includes(purpose)
+          ) {
+            break;
+          }
         }
         if (
           FALLBACK_ERROR_CODES.has(error?.code) &&
-          ["follow_up", "compose", "rewrite"].includes(purpose)
+          ["follow_up", "compose", "rewrite", "curator"].includes(purpose)
         ) {
           break;
         }
@@ -818,6 +1027,19 @@ export class MementoService {
         validateRewriteOutput(safeRewrite),
         input
       );
+    }
+
+    if (purpose === "curator" && supportsLocalRecovery(lastError)) {
+      const safeCurator = buildSafeCurator(input, evidence);
+      const validated = validateCuratorCandidates(safeCurator, {
+        evidence,
+        currentDraft: input.current_draft
+      });
+      validated.runtime = {
+        model_used: "local-editorial-fallback",
+        fallback_used: true
+      };
+      return validated;
     }
 
     throw lastError;

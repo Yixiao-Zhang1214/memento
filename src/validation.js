@@ -18,6 +18,7 @@ const MODES = new Set([
   "auto",
   "ask_followup",
   "compose_memory",
+  "finalize_memory",
   "polish_text",
   "expand_text",
   "optimization_options",
@@ -57,6 +58,59 @@ const PRIVATE_REFERENCE_NAMES = [
   "史铁生",
   "阿城"
 ];
+const CURATOR_ROUTES = new Set([
+  "tender_daily",
+  "first_heartbeat",
+  "intimate_tension",
+  "family_old_days",
+  "friendship_complicity",
+  "bright_delight",
+  "absurd_self_mockery",
+  "nostalgia_change",
+  "regret_parting",
+  "grief_loss",
+  "endurance_afterward",
+  "neutral_sparse"
+]);
+const CURATOR_MOVES = new Set([
+  "object_role",
+  "factual_contrast",
+  "small_action_consequence",
+  "kept_vs_gone",
+  "material_time",
+  "unsaid_tension",
+  "shared_complicity",
+  "ordinary_absence",
+  "limit_and_continuance",
+  "exact_object_observation"
+]);
+const ROUTE_MOVES = Object.freeze({
+  tender_daily: new Set(["object_role", "small_action_consequence"]),
+  first_heartbeat: new Set(["small_action_consequence", "object_role"]),
+  intimate_tension: new Set(["factual_contrast", "unsaid_tension"]),
+  family_old_days: new Set(["object_role", "material_time"]),
+  friendship_complicity: new Set([
+    "shared_complicity",
+    "small_action_consequence"
+  ]),
+  bright_delight: new Set(["factual_contrast", "small_action_consequence"]),
+  absurd_self_mockery: new Set(["factual_contrast", "object_role"]),
+  nostalgia_change: new Set(["material_time", "kept_vs_gone"]),
+  regret_parting: new Set(["kept_vs_gone", "unsaid_tension"]),
+  grief_loss: new Set(["ordinary_absence", "kept_vs_gone"]),
+  endurance_afterward: new Set(["limit_and_continuance", "object_role"]),
+  neutral_sparse: new Set(["exact_object_observation", "object_role"])
+});
+const GENERIC_CURATOR_PATTERN =
+  /(值得.{0,4}珍藏|见证.{0,4}成长|平凡中.{0,4}不平凡|这就是.{0,4}模样|承载着.{0,8}回忆|岁月的见证|珍贵的回忆|永远留在|生活的一部分)/;
+const HUMOR_PATTERN =
+  /(哈哈|好笑|搞笑|活该|笑话|荒唐|离谱|拿捏|钉子户|输得|赢得|打败|审美输)/;
+const HUMOR_DISABLED_ROUTES = new Set([
+  "intimate_tension",
+  "regret_parting",
+  "grief_loss",
+  "endurance_afterward"
+]);
 
 const DEFAULT_QUESTION_STATE = Object.freeze({
   asked: false,
@@ -715,14 +769,64 @@ function assertStringField(output, field) {
 
 export function validateComposeOutput(output) {
   assertBaseOutput(output, "compose_memory");
-  for (const field of [
-    "title",
-    "source_line",
-    "summary",
-    "story_text",
-    "curator_note"
-  ]) {
+  for (const field of ["title", "source_line", "summary", "story_text"]) {
     assertStringField(output, field);
+  }
+  if (output.curator_note != null || output.curator_profile != null) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "编辑中的草稿不应提前生成馆员评语。",
+      status: 502,
+      retryable: true,
+      details: { reason: "CURATOR_GENERATED_BEFORE_FINALIZATION" }
+    });
+  }
+  if (
+    output.status !== "needs_user_input" ||
+    !["base_polished", "restyled"].includes(output.draft_stage) ||
+    output.revision_state !== "awaiting_direction"
+  ) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "可编辑草稿的流程状态不完整。",
+      status: 502,
+      retryable: true,
+      details: { reason: "DRAFT_STATE_INVALID" }
+    });
+  }
+  const actionIds = Array.isArray(output.post_draft_actions)
+    ? output.post_draft_actions.map((action) => action?.id)
+    : [];
+  const expectedActions = [
+    "continue_supplement",
+    "ask_more",
+    "keep_draft",
+    "adjust_style",
+    "custom_style"
+  ];
+  if (
+    actionIds.length !== expectedActions.length ||
+    expectedActions.some((action) => !actionIds.includes(action))
+  ) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "可编辑草稿缺少后续操作。",
+      status: 502,
+      retryable: true,
+      details: { reason: "DRAFT_ACTIONS_INVALID" }
+    });
+  }
+  if (
+    !Array.isArray(output.evidence_bindings?.curator_note) ||
+    output.evidence_bindings.curator_note.length !== 0
+  ) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "编辑阶段不能绑定馆员评语证据。",
+      status: 502,
+      retryable: true,
+      details: { reason: "CURATOR_BOUND_BEFORE_FINALIZATION" }
+    });
   }
 
   const sourceLength = Array.from(output.source_line).length;
@@ -730,18 +834,6 @@ export function validateComposeOutput(output) {
     throw new AppError({
       code: "MODEL_OUTPUT_INVALID",
       message: "来源文字长度不符合要求，请重试。",
-      status: 502,
-      retryable: true
-    });
-  }
-
-  const curatorSentenceMarks = (
-    output.curator_note.match(/[。！？!?]/g) ?? []
-  ).length;
-  if (curatorSentenceMarks > 1) {
-    throw new AppError({
-      code: "MODEL_OUTPUT_INVALID",
-      message: "馆员评语必须是一句话，请重试。",
       status: 502,
       retryable: true
     });
@@ -767,6 +859,212 @@ export function validateComposeOutput(output) {
     }
   });
 
+  return output;
+}
+
+function normalizedComparableText(value) {
+  return String(value ?? "")
+    .toLowerCase()
+    .replace(/[，。！？、；：,.!?;:\s“”"'（）()《》]/g, "");
+}
+
+function textBigrams(value) {
+  const normalized = normalizedComparableText(value);
+  if (normalized.length < 2) return new Set([normalized]);
+  const pairs = new Set();
+  for (let index = 0; index < normalized.length - 1; index += 1) {
+    pairs.add(normalized.slice(index, index + 2));
+  }
+  return pairs;
+}
+
+function textSimilarity(first, second) {
+  const left = normalizedComparableText(first);
+  const right = normalizedComparableText(second);
+  if (!left || !right) return 0;
+  if (left === right || left.includes(right) || right.includes(left)) return 1;
+  const leftPairs = textBigrams(left);
+  const rightPairs = textBigrams(right);
+  let overlap = 0;
+  for (const pair of leftPairs) {
+    if (rightPairs.has(pair)) overlap += 1;
+  }
+  return (2 * overlap) / (leftPairs.size + rightPairs.size);
+}
+
+function curatorCandidateIssue(candidate, { route, evidenceIds, storyText }) {
+  if (!candidate || typeof candidate !== "object" || Array.isArray(candidate)) {
+    return "CURATOR_CANDIDATE_INVALID";
+  }
+  const text = typeof candidate.text === "string" ? candidate.text.trim() : "";
+  const length = Array.from(text).length;
+  if (length < 8 || length > 25) return "CURATOR_LENGTH_INVALID";
+  if ((text.match(/[。！？!?]/g) ?? []).length > 1) {
+    return "CURATOR_MULTIPLE_SENTENCES";
+  }
+  if (
+    PRIVATE_REFERENCE_NAMES.some((name) => text.includes(name)) ||
+    /(模仿|仿写|风格参考|作家|作者)/.test(text)
+  ) {
+    return "CURATOR_PRIVATE_REFERENCE";
+  }
+  if (GENERIC_CURATOR_PATTERN.test(text)) return "CURATOR_GENERIC";
+  if (textSimilarity(text, storyText) >= 0.78) {
+    return "CURATOR_REPEATS_BODY";
+  }
+  const lensId = candidate.lens_id;
+  if (!CURATOR_MOVES.has(lensId) || !ROUTE_MOVES[route]?.has(lensId)) {
+    return "CURATOR_ROUTE_MOVE_MISMATCH";
+  }
+  if (
+    !Array.isArray(candidate.evidence_ids) ||
+    candidate.evidence_ids.length === 0 ||
+    candidate.evidence_ids.some((id) => !evidenceIds.has(id))
+  ) {
+    return "CURATOR_EVIDENCE_INVALID";
+  }
+  if (HUMOR_DISABLED_ROUTES.has(route) && HUMOR_PATTERN.test(text)) {
+    return "CURATOR_HUMOR_UNSAFE";
+  }
+  return null;
+}
+
+export function validateCuratorCandidates(
+  output,
+  { evidence = [], currentDraft = {} } = {}
+) {
+  assertBaseOutput(output, "finalize_memory");
+  if (output.status !== "complete" || !CURATOR_ROUTES.has(output.emotion_route)) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "馆员没有选择有效的人设路线。",
+      status: 502,
+      retryable: true,
+      details: { reason: "CURATOR_ROUTE_INVALID" }
+    });
+  }
+  if (
+    !Array.isArray(output.candidates) ||
+    output.candidates.length === 0 ||
+    output.candidates.length > 3
+  ) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "馆员候选结果不完整。",
+      status: 502,
+      retryable: true,
+      details: { reason: "CURATOR_CANDIDATES_MISSING" }
+    });
+  }
+
+  const evidenceIds = new Set(
+    evidence.map((item) => item?.id).filter(Boolean)
+  );
+  const issues = [];
+  for (const candidate of output.candidates) {
+    const issue = curatorCandidateIssue(candidate, {
+      route: output.emotion_route,
+      evidenceIds,
+      storyText: currentDraft.story_text
+    });
+    if (!issue) {
+      return {
+        contract_version: "1.1",
+        status: "complete",
+        mode: "finalize_memory",
+        emotion_route: output.emotion_route,
+        selected_candidate: {
+          text: candidate.text.trim(),
+          lens_id: candidate.lens_id,
+          evidence_ids: [...new Set(candidate.evidence_ids)]
+        }
+      };
+    }
+    issues.push(issue);
+  }
+
+  throw new AppError({
+    code: "MODEL_OUTPUT_INVALID",
+    message: "馆员评语没有通过最终质量检查。",
+    status: 502,
+    retryable: true,
+    details: {
+      reason: issues[0] ?? "CURATOR_CANDIDATE_INVALID",
+      candidate_reasons: issues
+    }
+  });
+}
+
+export function validateFinalizedMemory(output, input = {}) {
+  assertBaseOutput(output, "finalize_memory");
+  for (const field of [
+    "title",
+    "source_line",
+    "summary",
+    "story_text",
+    "curator_note"
+  ]) {
+    assertStringField(output, field);
+  }
+  if (
+    output.status !== "complete" ||
+    output.revision_state !== "finalized" ||
+    !Array.isArray(output.post_draft_actions) ||
+    output.post_draft_actions.length !== 0
+  ) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "最终收藏状态不完整。",
+      status: 502,
+      retryable: true
+    });
+  }
+
+  const currentDraft = input.current_draft ?? {};
+  for (const field of ["title", "source_line", "summary", "story_text"]) {
+    if (currentDraft[field] != null && output[field] !== currentDraft[field]) {
+      throw new AppError({
+        code: "MODEL_OUTPUT_INVALID",
+        message: "生成馆员评语时改变了已经确认的正文。",
+        status: 502,
+        retryable: true,
+        details: { reason: "FINALIZATION_CHANGED_DRAFT", field }
+      });
+    }
+  }
+
+  const evidence = Array.isArray(output.evidence) ? output.evidence : [];
+  const evidenceIds = new Set(
+    evidence.map((item) => item?.id).filter(Boolean)
+  );
+  const route = output.curator_profile?.emotion_route;
+  const candidate = {
+    text: output.curator_note,
+    lens_id: output.curator_profile?.lens_id,
+    evidence_ids: output.evidence_bindings?.curator_note
+  };
+  if (!CURATOR_ROUTES.has(route)) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "最终馆员路线无效。",
+      status: 502,
+      retryable: true
+    });
+  }
+  const issue = curatorCandidateIssue(candidate, {
+    route,
+    evidenceIds,
+    storyText: output.story_text
+  });
+  if (issue) {
+    throw new AppError({
+      code: "MODEL_OUTPUT_INVALID",
+      message: "最终馆员评语没有通过质量检查。",
+      status: 502,
+      retryable: true,
+      details: { reason: issue }
+    });
+  }
   return output;
 }
 

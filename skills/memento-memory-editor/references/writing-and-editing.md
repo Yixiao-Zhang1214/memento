@@ -4,7 +4,7 @@
 
 1. Compose a memory
 2. Write the source line
-3. Write the curator note
+3. Finalize with the curator note
 4. Preserve voice
 5. Adjust style after drafting
 6. Edit existing text
@@ -34,7 +34,8 @@ about style:
 - Source line: default 4-18 Chinese characters.
 - Summary: default 12-36 Chinese characters.
 - Body: default 120-260 Chinese characters.
-- Curator note: default 20-45 Chinese characters and one sentence.
+- Curator note: absent while editing; 8-25 Chinese characters and one sentence
+  only after finalization.
 
 Use concrete supplied details before abstract conclusions. Build a short,
 coherent account rather than concatenating source fields.
@@ -55,7 +56,8 @@ When an object or image is the memory's anchor:
 - Describe what is visible and the fact that this moment was kept.
 - Keep the body to roughly 30-90 Chinese characters.
 - Do not use first-person experience, relationship, or emotional conclusions.
-- Still write a one-sentence curator note with low interpretive intensity.
+- Finalization may add a one-sentence curator note with low interpretive
+  intensity.
 
 ## 2. Write the source line
 
@@ -85,9 +87,10 @@ Avoid:
 - `一段珍贵而浪漫的爱情回忆`
 - any date, season, person, or relationship absent from evidence.
 
-## 3. Write the curator note
+## 3. Finalize with the curator note
 
-Treat `curator_note` as a required editorial field, not a summary.
+Do not write `curator_note` in `compose_memory` or `rewrite_text`. Treat it as a
+required final editorial field only in `finalize_memory`, not as a summary.
 
 Read [curator-lenses.md](curator-lenses.md), choose one route from E1 evidence
 and `tone_profile`, and write from the stable Memento curator perspective:
@@ -101,6 +104,7 @@ and `tone_profile`, and write from the stable Memento curator perspective:
   unless E1 supports them.
 - For quiet text, comment only on the visible moment or the act of keeping it.
 - Keep it to one sentence.
+- Keep it to 8-25 Unicode characters including punctuation.
 - Keep the internal calibration person private. Do not name them or describe the
   result as an imitation.
 
@@ -108,19 +112,19 @@ Examples:
 
 User evidence: “第一份工作时买的杯子，留下来是想记得自己也撑过来了。”
 
-Curator note: “它留下的不是那些加班的夜晚，而是你第一次确认自己能够撑过去。”
+Curator note: “杯子有了缺口，人还是往前走了。”
 
 Photo-only evidence: sea at dusk.
 
-Curator note: “它没有解释那天发生了什么，只替你把黄昏留了下来。”
+Curator note: “海没有解释，只把黄昏留在岸边。”
 
 Playful evidence: “朋友送的，丑得很好笑，我居然用了三年。”
 
-Curator note: “审美没有说服你，耐用倒是悄悄赢了三年。”
+Curator note: “审美输得彻底，三年就是证据。”
 
 First-confession evidence: “他问我愿不愿意做他女朋友，我说好。”
 
-Curator note: “这束花替一个冒险的问题壮了胆，又被一个‘好’留到了现在。”
+Curator note: `一个“好”字，让花有了后半生。`
 
 ## 4. Preserve voice
 
@@ -156,9 +160,9 @@ about voice, length, structure, polish, or a creator reference. Convert the
 request into `style_features` and rewrite only `story_text`.
 
 Do not reopen the factual question budget. Preserve title, `source_line`,
-summary, evidence, and curator route unless the user explicitly asks to edit
-those fields. Re-audit the curator note after a body rewrite and change it only
-when it has become repetitive or mismatched.
+summary, and evidence unless the user explicitly asks to edit those fields.
+Do not generate the curator route or note until the user finalizes the selected
+body.
 
 ## 6. Edit existing text
 
@@ -210,9 +214,10 @@ Before returning any generated or edited text:
    contains a relevant person.
 4. Confirm style choices occur after the base draft and only change expression.
 5. Confirm person has not changed without instruction.
-6. Confirm the curator note exists for `compose_memory`, is one sentence, does
-   not repeat the body, uses exactly one curator route, and exposes no internal
-   reference person.
+6. Confirm curator fields are null for editable drafts. For `finalize_memory`,
+   confirm the note exists, is 8-25 characters and one sentence, does not repeat
+   the body, uses exactly one curator route and observation move, and exposes no
+   internal reference person.
 7. Remove unsupported facts and generic AI uplift.
 8. Check that length follows the user's request or default.
 9. Return `audit.passed: true` only after repair.

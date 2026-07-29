@@ -15,7 +15,8 @@ const FILES = {
 
 const MODE_REFERENCES = {
   ask_followup: ["tone", "questioning"],
-  compose_memory: ["tone", "questioning", "writing", "curator"],
+  compose_memory: ["tone", "questioning", "writing"],
+  finalize_memory: ["tone", "writing", "curator"],
   rewrite_text: ["writing", "styles"],
   polish_text: ["writing"],
   expand_text: ["tone", "questioning", "writing"],

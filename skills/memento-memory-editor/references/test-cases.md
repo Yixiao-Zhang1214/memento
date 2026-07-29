@@ -17,10 +17,11 @@ Expect:
 - Compose only after the user answers or chooses “就这样收藏”.
 - Generate a `default_polish` base draft before offering style adjustment.
 - Generate a short, evidence-bound `source_line`.
-- Return all three post-draft actions.
+- Return all five post-draft actions.
 - Use `story`.
 - Preserve first person.
-- Generate a curator note grounded in “撑过来了”.
+- Generate no curator note in the editable draft.
+- On finalization, generate a curator note grounded in “撑过来了”.
 - Route the curator note to `endurance_afterward`.
 - Add no company, date, office detail, or dialogue.
 
@@ -36,7 +37,7 @@ Expect:
 
 - Use `quiet`.
 - Describe only visible evidence and the act of keeping it.
-- Generate a restrained curator note.
+- Generate no note before finalization; generate a restrained final note.
 - Add no travel, age, freedom, transition, or mood.
 
 ## 3. Perishable flowers
@@ -78,7 +79,7 @@ Expect:
 
 - Keep the playful temperature.
 - Generate the base draft before asking about style.
-- Allow light humor in the curator note.
+- Allow light humor in the final curator note.
 - Do not become sentimental about friendship.
 - Do not ridicule the friend or user.
 
@@ -169,7 +170,7 @@ Expect:
 Input:
 
 - User tells a light, teasing story.
-- Draft curator note becomes solemn and uplifting.
+- Final curator note becomes solemn and uplifting.
 
 Expect:
 
@@ -199,7 +200,7 @@ Expect:
 - Keep the boyfriend in `source_line`: with time, use a form such as
   “2024年春，他的告白”; without time, use a form such as
   “他的一句‘愿不愿意’”.
-- Route the eventual curator note to `first_heartbeat`.
+- Route the final curator note to `first_heartbeat`.
 - Do not expose the internal calibration person's name.
 
 ## 14. Grief route

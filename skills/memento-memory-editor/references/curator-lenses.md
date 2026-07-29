@@ -90,6 +90,25 @@ Useful moves:
 - distinguish what disappeared from what was actually kept;
 - let an ordinary fact carry emotional weight.
 
+Choose exactly one public-safe observation move before writing:
+
+- `object_role`
+- `factual_contrast`
+- `small_action_consequence`
+- `kept_vs_gone`
+- `material_time`
+- `unsaid_tension`
+- `shared_complicity`
+- `ordinary_absence`
+- `limit_and_continuance`
+- `exact_object_observation`
+
+Generate the curator note only in `finalize_memory`. Produce up to three private
+candidates, rank them, and expose only the first candidate that passes the
+contract. Each candidate must bind at least one evidence ID, contain one new
+observation, use only one move, and stay within 8-25 Unicode characters
+including punctuation.
+
 Do not:
 
 - summarize the story;
@@ -107,7 +126,7 @@ Structured output may expose only:
 {
   "curator_profile": {
     "emotion_route": "first_heartbeat",
-    "lens_id": "clean_first_moment"
+    "lens_id": "small_action_consequence"
   }
 }
 ```
