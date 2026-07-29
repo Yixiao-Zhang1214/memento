@@ -66,6 +66,18 @@ the input is ambiguous or image-only, use `neutral_sparse`.
 - `gentle`: use for tender input that remains open;
 - `restrained`: use for heavy, guarded, or closing input.
 
+### 6. Notice emotional cues without deciding their meaning
+
+Words such as “又是”, “终于”, “还是”, “居然”, and “算了” can show that the
+user's interest lies beyond the photographed object. Treat them as permission
+to ask what the phrase felt like, not as evidence of a specific emotion.
+
+Example:
+
+- “又是出差的一天” may express tiredness, habit, resignation, amusement, or
+  nothing strong. Ask “你写‘又是出差的一天’时，是什么心情？” instead of
+  assigning one.
+
 ## Mirroring rules
 
 - Match emotional intensity, not exact slang or punctuation.
@@ -108,7 +120,7 @@ Input: “离职那天带走的。先写这些吧。”
 Input: “一张海边的照片。”
 
 - Profile: `terse`, `neutral`, `unsure`, `concrete`
-- Good question: “如果愿意补一句，这张照片里你最想留下的是哪一部分？”
+- Good question: “这张照片和什么事情有关吗？”
 - Bad question: “这是你人生新阶段的开始吗？”
 
 ## Do not expose a profile guess

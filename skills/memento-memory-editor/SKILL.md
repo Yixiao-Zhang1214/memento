@@ -1,6 +1,6 @@
 ---
 name: memento-memory-editor
-description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text through one required-but-skippable tone-aware follow-up, a default-polished integrated draft, a short artistic source line, distinctive system-routed curator notes, and post-draft preset or custom style adjustment. Use when asked to ask one fitting follow-up, compose or edit Memento memory text, preserve a user's voice, create a curator comment, customize prose style, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
+description: Turn photos, object descriptions, personal memories, and voice transcripts into truthful Memento text centered on the people, events, or feelings behind the object. Use one required-but-skippable tone-aware follow-up, a default-polished integrated draft, a short artistic source line, distinctive system-routed curator notes, and post-draft preset or custom style adjustment. Use when asked to follow an object into its memory, ask one fitting follow-up, compose or edit Memento text, preserve a user's voice, create a curator comment, customize prose style, or check that personal writing contains no invented facts. This is a text-editing skill; do not use it for card layout, image rendering, export, storage, or frontend implementation.
 ---
 
 # Memento Memory Editor
@@ -8,28 +8,32 @@ description: Turn photos, object descriptions, personal memories, and voice tran
 Create restrained, concrete, evidence-bound personal memory text. Notice how the
 user is speaking before choosing one optional-to-answer follow-up. Always produce
 a one-sentence curator note with a recognizable Memento point of view when
-composing a memory.
+composing a memory. Treat a photographed object as the entrance to a memory,
+not automatically as the memory's subject.
 
 ## Non-negotiable rules
 
 1. Preserve facts, relationships, person, and valuable colloquial phrasing.
-2. Treat silence as a valid input. Write less instead of inventing more.
-3. For every new memory, display exactly one system-initiated follow-up before
+2. Distinguish the visible or named object from the person, event, relationship,
+   or feeling the user is using it to remember. Follow the memory, not object
+   trivia, unless the user explicitly makes the object itself the subject.
+3. Treat silence as a valid input. Write less instead of inventing more.
+4. For every new memory, display exactly one system-initiated follow-up before
    first composition unless the user has already explicitly skipped or closed
    questioning. Make answering optional.
-4. Match the current input's emotional temperature without inferring a stable
+5. Match the current input's emotional temperature without inferring a stable
    personality or sensitive identity.
-5. Bind events, relationships, meanings, and emotional conclusions to user
+6. Bind events, relationships, meanings, and emotional conclusions to user
    evidence.
-6. Keep the curator note external to the user's voice and evidence-bound.
-7. Route the curator note through one internal reference lens selected from the
+7. Keep the curator note external to the user's voice and evidence-bound.
+8. Route the curator note through one internal reference lens selected from the
    evidence and tone. Learn only high-level craft traits. Never expose the
    reference person's name or claim imitation.
-8. Generate a default-polished integrated draft before asking about body style.
-9. Keep `source_line` short, evidence-bound, and person-aware.
-10. Keep post-draft body style independent from `source_line` and the
+9. Generate a default-polished integrated draft before asking about body style.
+10. Keep `source_line` short, evidence-bound, and person-aware.
+11. Keep post-draft body style independent from `source_line` and the
     system-selected curator lens.
-11. Never perform card rendering, visual layout, image export, or storage work.
+12. Never perform card rendering, visual layout, image export, or storage work.
 
 ## Route the request
 
@@ -86,13 +90,15 @@ signals before considering information density.
 ### 3. Apply the global question budget
 
 On a fresh memory, select and display one useful question even when the supplied
-facts are already sufficient to draft. When E1 describes one identifiable event
-and E1/E3 contain no time, prefer `time_probe` if time would improve the memory's
-provenance. Accept exact or approximate time. Do not repeat known information.
-Do not display a question only when the user has explicitly skipped, closed
-questioning, or already answered the current question. Allow one user-requested
-replacement before an answer; do not treat that as permission for a multi-round
-interview.
+facts are already sufficient to draft. First separate the object or image
+`anchor` from the E1-supported `memory target`: the person, event, relationship,
+or feeling the user is recalling through it. Compare candidate questions by
+how much their likely answer would improve the story and how easy they are to
+answer. Give no default priority to time or object details. Reject questions
+whose answer is already implied by the input. Do not display a question only
+when the user has explicitly skipped, closed questioning, or already answered
+the current question. Allow one user-requested replacement before an answer; do
+not treat that as permission for a multi-round interview.
 
 ### 4. Generate the base draft
 
@@ -101,6 +107,9 @@ interview.
 - Keep editing modes within existing evidence.
 - Merge all user inputs and the follow-up answer into one `default_polish`
   draft. Reorder, deduplicate, and smooth transitions without adding facts.
+- When an object or image opened the memory, use it as a concrete anchor while
+  centering `story_text` on the supported person, event, relationship, or
+  feeling. Do not turn the memory into an object description or review.
 - Generate `source_line` separately. Prefer time + person + event; when time is
   missing, preserve an E1-supported person before the key line or action. Never
   infer a person or relationship.

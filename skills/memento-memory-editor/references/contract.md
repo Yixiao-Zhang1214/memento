@@ -131,8 +131,8 @@ Allowed tone values:
   "needs_followup": true,
   "evidence": [],
   "tone_profile": {},
-  "question_intent": "time_probe",
-  "question": "你还记得这大概是什么时候吗？",
+  "question_intent": "scene_probe",
+  "question": "那天有没有一件事是你到现在还记得的？",
   "user_actions": [
     {
       "id": "replace_question",

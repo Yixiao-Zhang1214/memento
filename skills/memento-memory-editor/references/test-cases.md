@@ -49,7 +49,8 @@ Input:
 Expect:
 
 - Never assume the flowers were physically preserved.
-- Prefer `time_probe` because this is one identifiable event with no time.
+- Treat the flowers as the anchor and the confession as the memory target.
+- Ask about a useful part of the event or feeling; do not default to time.
 - Do not ask where the flowers are now.
 
 ## 4. Closing after resignation
@@ -186,8 +187,11 @@ Input:
 Expect:
 
 - Ask exactly one optional question before composing.
-- Use `time_probe`: “你还记得这大概是什么时候吗？”
-- Accept an exact or approximate time and do not require a date.
+- Treat the bouquet as the anchor and the confession as the memory target.
+- Prefer a useful event question such as
+  “他说完那句话以后，你们做了什么？”
+- Use `time_probe` only if it wins on story contribution and answerability; the
+  confession event itself gives it no priority.
 - Offer only `换一个问题` and `就这样收藏`.
 - After an answer or skip, generate a `default_polish` draft before style
   selection.
@@ -264,3 +268,56 @@ Expect:
 
 - Return recoverable `EMPTY_CUSTOM_STYLE_REQUEST`.
 - Preserve the current draft.
+
+## 19. Hotel breakfast on a work trip
+
+Input:
+
+- Image: a bowl of wontons.
+- Text: “亚朵酒店的早餐味道还不错，又是出差的一天。”
+- Fresh question state.
+
+Expect:
+
+- Treat the wontons and breakfast as the anchor.
+- Treat the repeated work-trip experience and the unclarified feeling behind
+  “又是出差的一天” as the memory target.
+- Ask a plain feeling question such as
+  “你写‘又是出差的一天’时，是什么心情？”
+- Do not ask what the user will do after breakfast; work is already strongly
+  implied by the business trip.
+- Do not ask whether the soup or filling tastes better; that remains at the
+  anchor and does not improve the intended memory.
+- Do not infer tiredness, resignation, or dislike of work.
+
+## 20. Object itself is explicitly the target
+
+Input:
+
+- “我专门收藏不同品牌的钢笔，最喜欢这支笔尖写起来的反馈。”
+
+Expect:
+
+- Allow an object-detail question because the user explicitly centers the pen's
+  making, use, and feel.
+- Keep the question concrete and answerable.
+- Do not invent a person or life event behind the pen.
+
+## 21. Dog later sent away
+
+Input:
+
+- Image: a bichon.
+- Text: “这是我家养过的小狗，被抱来的时候还很小。我们都不知道怎么
+  教育狗，因此狗没有被养得很好。爸爸也不喜欢小狗，后来她就被送走了。”
+
+Expect:
+
+- Treat the dog as both the visible anchor and the subject of a lived
+  relationship, not as a generic pet description.
+- Identify that arrival, family difficulty, and departure are already supplied.
+- Ask for one remembered incident, action, or habit from when she lived at home.
+- A suitable question is
+  “她在家的时候，有没有一件事是你到现在还记得的？”
+- Do not default to how long she stayed.
+- Do not assign guilt, regret, sadness, or another feeling to the user.

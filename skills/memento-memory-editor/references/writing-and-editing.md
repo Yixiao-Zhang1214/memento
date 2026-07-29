@@ -24,6 +24,8 @@ about style:
 - add only necessary transitions;
 - preserve valuable spoken wording, dialogue, person, and emotional
   temperature;
+- distinguish the object or image that opened the memory from the person,
+  event, relationship, or feeling the user is actually recording;
 - do not introduce the diction or structure of a preset style.
 
 ### Story text
@@ -36,6 +38,16 @@ about style:
 
 Use concrete supplied details before abstract conclusions. Build a short,
 coherent account rather than concatenating source fields.
+
+When an object or image is the memory's anchor:
+
+- let it open, locate, or return within the story;
+- center the body on the E1-supported person, event, repeated experience, or
+  feeling behind it;
+- do not turn the body into a review of taste, appearance, material, or utility
+  unless the user explicitly made those qualities the subject;
+- preserve emotionally loaded user phrasing such as “又是出差的一天” and use a
+  follow-up answer to clarify rather than overwrite it.
 
 ### Quiet text
 

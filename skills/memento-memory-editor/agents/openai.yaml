@@ -1,4 +1,4 @@
 interface:
   display_name: "Memento Memory Editor"
-  short_description: "先追问并生成默认成稿，再调整预设或自定义正文风格"
-  default_prompt: "Use $memento-memory-editor to ask one skippable tone-aware follow-up, generate a default-polished integrated draft with a short source line and distinctive curator note, then offer preset or custom post-draft style adjustment."
+  short_description: "从物品进入人物、事情与感受，追问后生成可收藏的纪念文字"
+  default_prompt: "Use $memento-memory-editor to follow an object into the person, event, or feeling behind it, ask one natural skippable follow-up, and create truthful Memento text."

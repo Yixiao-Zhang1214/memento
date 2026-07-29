@@ -20,25 +20,58 @@ Use this order:
    `QUESTION_BUDGET_CLOSED`.
 3. If the user's input itself explicitly says “不想回答”, “不要问了”,
    “就这样收藏”, or an equivalent opt-out, return `BOUNDARY_CLOSING`.
-4. If E1 describes one identifiable event, E1/E3 contain no time, and a time
-   coordinate would improve provenance, prefer `time_probe`.
-5. Otherwise generate up to three candidate questions for the single most
-   useful remaining gap, even when existing evidence is sufficient to draft.
-6. Reject leading, repetitive, private, double, or low-value candidates.
-7. Ask the highest-scoring safe candidate. If a deep question would be
+4. Separate the `anchor` from the `memory target`.
+5. Form a provisional draft from current evidence and identify what one answer
+   could add to its person, event, relationship, or feeling.
+6. Generate up to five candidate questions from different useful directions.
+   Let time and object detail compete without default priority.
+7. Reject leading, repetitive, private, double, low-value, or already-answered
+   candidates.
+8. Ask the highest-scoring safe candidate. If a deep question would be
    invasive, fall back to a concrete or choice probe rather than skipping the
    question.
-8. Use `NO_SAFE_HIGH_VALUE_QUESTION` only when every possible question would
+9. Use `NO_SAFE_HIGH_VALUE_QUESTION` only when every possible question would
    violate evidence, privacy, or safety constraints.
+
+## Separate the anchor from the memory target
+
+The `anchor` is the photographed or named object that opens the memory: a bowl
+of wontons, flowers, a ticket, a cup, a watch, or a dog in a photograph.
+
+The `memory target` is what E1 is actually trying to retain or express:
+
+- a person or relationship;
+- an event or period of life;
+- a repeated experience;
+- a feeling already stated or signaled in the user's phrasing;
+- the object itself, only when the user explicitly centers its qualities,
+  making, use, or collection.
+
+When E1 supplies context around an object, follow that context. Do not remain at
+the anchor merely because it is easy to ask about.
+
+Examples:
+
+- “亚朵酒店的早餐味道还不错，又是出差的一天”：the breakfast is the
+  anchor; the repeated business-trip experience and the feeling behind “又是”
+  are the target.
+- “告白那天的花”：the flowers are the anchor; the confession and relationship
+  beginning are the target.
+- “爸爸生前常戴的手表”：the watch is the anchor; the father and remembered
+  life around him are the target.
+- “专门收藏不同品牌的钢笔，最喜欢这支笔尖的反馈”：the pen itself is an
+  explicit target, so an object-detail question can be useful.
+
+Do not expose `anchor`, `memory target`, candidate questions, or scores to the
+user.
 
 ## Question intents
 
 ### `time_probe`
 
-Use when the memory centers on one identifiable event and no time is available
-from E1 or E3. Prefer it for confessions, graduations, resignations, first
-meetings, birthdays, trips, and one-time gifts when time improves the memory's
-provenance.
+Use when time materially clarifies chronology, life stage, or why this instance
+matters among similar memories. A confession, graduation, resignation, trip,
+or gift does not make time the default.
 
 Example: “你还记得这大概是什么时候吗？”
 
@@ -51,42 +84,44 @@ exists or when the memory spans a long period.
 
 Use when a concrete scene would ground an abstract or minimal account.
 
-Example: “如果只补一个画面，你最先想到它出现在哪里？”
+Example: “那天有没有一件事是你到现在还记得的？”
 
 ### `sensory_probe`
 
 Use only when the user is already describing a scene and a remembered sensory
 detail would help. Do not demand invented atmosphere.
 
-Example: “那个画面里，你还记得最清楚的是一种声音，还是一个动作？”
+Example: “你还记得当时有什么声音吗？”
 
 ### `moment_probe`
 
 Use when an item is known but its relevant moment is missing.
 
-Example: “它最像是把哪一次使用留了下来？”
+Example: “你用它的时候，有没有一件事是你一直记得的？”
 
 ### `contrast_probe`
 
 Use when the user explicitly mentions past/present, before/after, getting/
 losing, or continued use.
 
-Example: “刚得到它和现在再看它，最不一样的是什么？”
+Example: “那时候和现在，哪里最不一样？”
 
 ### `aftertrace_probe`
 
 Use for flowers, food, tickets, notes, packaging, or anything that may disappear.
 
-Example: “它后来留下来的，是照片、一个动作，还是这件事本身？”
+Example: “那件事以后，你们还做了什么？”
 
 Do not assume the physical item survives.
 
 ### `significance_probe`
 
-Use only when the user is open and has already started explaining personal
-meaning.
+Use when the user is open and has already started explaining personal meaning,
+or when the user's own wording contains an important but unspecified feeling.
 
 Example: “你为什么一直想把这件事留到现在？”
+
+Feeling example: “你写‘又是出差的一天’时，是什么心情？”
 
 Do not use “这对你意味着什么” as the default.
 
@@ -95,29 +130,34 @@ Do not use “这对你意味着什么” as the default.
 Use when facts are sufficient but the user explicitly wants a more reflective
 ending.
 
-Example: “以后再看到这段文字时，你最想先记起哪一点？”
+Example: “以后再看这段话，你最想先记住哪件事？”
 
 ### `choice_probe`
 
 Use when the user does not know how to begin. Offer neutral, evidence-compatible
 choices.
 
-Example: “你更想留下它本身的样子，还是当时发生的一件小事？”
+Example: “你更想说说当时发生的事，还是和它有关的人？”
 
 Do not offer emotionally loaded choices such as “一个人、一段时光、一次告别”
 unless those themes are already E1 evidence.
 
 ## Candidate scoring
 
-Score each candidate from 0-2:
+Score each candidate:
 
-- information gain;
-- ease of answering;
-- fit with current tone;
-- value to the final text.
+- contribution to the final story: 0-4;
+- ease of answering, including whether a short answer works: 0-3;
+- fit with current tone and openness: 0-2;
+- non-redundancy with supplied or strongly implied information: 0-2.
 
-For `time_probe`, count support for `source_line`, title, or chronology as
-writing value. Do not reward time questions that would only collect trivia.
+Give no bonus to `time_probe`. Support for `source_line` counts only when time
+also improves chronology, life-stage context, or the story's identity.
+
+Give an object-detail candidate writing value only when the object itself is
+the explicit memory target or the detail connects directly to the supported
+person, event, or feeling. Better taste, color, material, or appearance alone
+does not improve a story whose target lies behind the object.
 
 Apply a blocking rejection for:
 
@@ -126,12 +166,51 @@ Apply a blocking rejection for:
 - repeating known information;
 - more than one independent request;
 - pure trivia with no writing value;
+- an answer already stated or strongly implied by the input;
+- a predictable generic answer such as asking what comes after breakfast when
+  the user has already said it is a work trip;
+- lingering on taste, appearance, or use when E1 points to a person, event, or
+  feeling behind the object;
 - contradiction with user correction;
 - assumption that a perishable item still exists.
 
-Prefer a non-rejected candidate scoring at least 6/8. If none reaches 6, ask the
-best safe concrete or choice probe scoring at least 4/8. Do not ask merely to
-collect trivia.
+Choose the highest-scoring non-rejected candidate. Break ties by contribution
+to the story, ease of answering, lower sensitivity, and closeness to the user's
+own wording. Do not ask merely to collect trivia.
+
+## Make the question sound human
+
+Before returning the selected candidate:
+
+- make the expected answer type obvious: one event, action, line, habit, reason,
+  feeling, time, or place;
+- ensure a short answer could be used in the eventual body;
+- reuse the user's nouns and distinctive phrasing where natural;
+- keep the question to one everyday sentence, preferably within 35 Chinese
+  characters;
+- use at most one question mark.
+
+Reject or rewrite editorial and therapeutic prompts such as:
+
+- “如果只留一个画面……”
+- “你最先想到的是什么样子……”
+- “这对你意味着什么……”
+- “你最想为它留下什么……”
+- “能否展开讲讲……”
+
+When a user's own phrase carries an unstated feeling and openness is not
+`closing`, ask about that phrase plainly. Example:
+
+Input: “亚朵酒店的早餐味道还不错，又是出差的一天。”
+
+Good: “你写‘又是出差的一天’时，是什么心情？”
+
+Bad:
+
+- “吃完这碗馄饨，你接下来要去做什么？” The likely answer is already
+  implied by “出差”.
+- “这碗馄饨是汤更好喝，还是馅儿更好吃？” It remains at the anchor and
+  misses the repeated experience the user chose to mention.
 
 ## Follow the tone
 
@@ -167,6 +246,10 @@ Before returning:
 - ensure one information request;
 - use at most one question mark;
 - make the expected answer obvious;
+- ensure the answer is not already stated or strongly implied;
+- ensure the question follows the memory target rather than defaulting to the
+  photographed object;
+- ensure a short answer could improve the eventual body;
 - avoid “请讲讲” and coaching language;
 - avoid “一定”, “是不是很”, and unsupported emotional framing;
 - ensure the user can skip;
