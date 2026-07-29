@@ -1,0 +1,17 @@
+{
+  "name": "memento-prototype",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Memento iPhone HTML prototype with a secure BigModel proxy.",
+  "scripts": {
+    "start": "node --env-file=.env src/server.js",
+    "start:mock": "MEMENTO_MOCK_MODE=true node src/server.js",
+    "dev:mock": "MEMENTO_MOCK_MODE=true node --watch src/server.js",
+    "test": "node --test",
+    "check": "node --check src/server.js && node --check public/app.js && node --test"
+  },
+  "engines": {
+    "node": ">=20.12"
+  }
+}

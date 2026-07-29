@@ -1,0 +1,317 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta
+      name="description"
+      content="Memento 把照片和零散讲述整理成真实、可收藏的纪念文字。"
+    />
+    <title>Memento 记忆编辑器</title>
+    <link rel="stylesheet" href="/styles.css" />
+  </head>
+  <body>
+    <main class="prototype-stage">
+      <section class="stage-copy" aria-labelledby="stage-title">
+        <p class="stage-brand">Memento</p>
+        <h1 id="stage-title">物品是入口，<br />记忆才是要留下的东西。</h1>
+        <p class="stage-description">
+          上传一张图片，写下一点你记得的事。馆员只多问一句，再替你把它整理好。
+        </p>
+        <p class="stage-note">HTML 验证版，不进行卡片渲染或云端保存。</p>
+      </section>
+
+      <section class="phone-frame" aria-label="Memento iPhone 验证界面">
+        <div class="phone-screen">
+          <div class="status-bar" aria-hidden="true">
+            <span>9:41</span>
+            <div class="device-status">
+              <span class="signal"></span>
+              <span class="wifi"></span>
+              <span class="battery"></span>
+            </div>
+          </div>
+
+          <div class="app-shell">
+            <header class="app-header">
+              <button
+                id="headerBackButton"
+                class="header-back"
+                type="button"
+                aria-label="返回"
+                hidden
+              >
+                返回
+              </button>
+              <p class="app-wordmark">Memento</p>
+              <p id="flowLabel" class="flow-label">新建记忆</p>
+            </header>
+
+            <div
+              id="errorBanner"
+              class="error-banner"
+              role="alert"
+              aria-live="assertive"
+              hidden
+            >
+              <p id="errorMessage"></p>
+              <button id="retryButton" type="button">再试一次</button>
+            </div>
+
+            <div id="loadingLayer" class="loading-layer" hidden>
+              <div class="loading-copy" role="status" aria-live="polite">
+                <p id="loadingText">正在整理这段记忆</p>
+                <div class="skeleton-lines" aria-hidden="true">
+                  <span></span>
+                  <span></span>
+                  <span></span>
+                </div>
+              </div>
+            </div>
+
+            <div class="screen-stack">
+              <section id="inputScreen" class="app-screen is-active">
+                <div class="screen-intro">
+                  <p class="section-kicker">留下一件东西</p>
+                  <h2>它背后的事，也值得被记住。</h2>
+                  <p>一句话就够了。暂时不想说，也可以只上传图片。</p>
+                </div>
+
+                <form id="memoryForm" class="memory-form">
+                  <div class="field-block">
+                    <label for="imageInput">图片</label>
+                    <p class="field-help">JPEG、PNG 或 WebP，最大 10 MB</p>
+                    <label id="imagePicker" class="image-picker" for="imageInput">
+                      <input
+                        id="imageInput"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                      />
+                      <img id="imagePreview" alt="准备收藏的图片预览" hidden />
+                      <span id="imageEmpty" class="image-empty">
+                        <strong>选择一张图片</strong>
+                        <small>照片中的物品会成为记忆的入口</small>
+                      </span>
+                    </label>
+                    <button
+                      id="removeImageButton"
+                      class="text-action"
+                      type="button"
+                      hidden
+                    >
+                      移除图片
+                    </button>
+                  </div>
+
+                  <div class="field-block">
+                    <label for="rawTextInput">关于它，你想记住什么？</label>
+                    <textarea
+                      id="rawTextInput"
+                      rows="6"
+                      maxlength="10000"
+                      placeholder="比如：这是男朋友告白那天送的花。"
+                    ></textarea>
+                    <p class="field-help">保留你的说法，不确定的地方不会替你补写。</p>
+                  </div>
+
+                  <button class="primary-button" type="submit">开始整理</button>
+                </form>
+              </section>
+
+              <section id="questionScreen" class="app-screen" hidden>
+                <div class="question-panel">
+                  <p class="section-kicker">馆员想多问一句</p>
+                  <h2 id="questionText"></h2>
+                  <p class="question-note">可以简单回答，也可以直接收藏。</p>
+                </div>
+
+                <form id="answerForm" class="answer-form">
+                  <label for="answerInput">想到什么就写什么</label>
+                  <div class="answer-composer">
+                    <textarea
+                      id="answerInput"
+                      rows="3"
+                      maxlength="5000"
+                      placeholder="写下一句话"
+                    ></textarea>
+                    <button type="submit">写入</button>
+                  </div>
+                </form>
+
+                <div class="question-actions">
+                  <button
+                    id="replaceQuestionButton"
+                    class="secondary-button"
+                    type="button"
+                  >
+                    换一个问题
+                  </button>
+                  <button
+                    id="composeNowButton"
+                    class="secondary-button"
+                    type="button"
+                  >
+                    就这样收藏
+                  </button>
+                </div>
+              </section>
+
+              <section id="draftScreen" class="app-screen" hidden>
+                <div class="screen-intro compact">
+                  <p class="section-kicker">整理好了</p>
+                  <h2>先看看这一版。</h2>
+                  <p>这是默认润色。事实没有增加，语序和节奏被整理过。</p>
+                </div>
+
+                <article class="memory-text" aria-label="整理后的纪念文字">
+                  <p id="draftSource" class="memory-source"></p>
+                  <h2 id="draftTitle"></h2>
+                  <p id="draftSummary" class="memory-summary"></p>
+                  <div id="draftStory" class="memory-story"></div>
+                  <aside class="curator-note">
+                    <p class="curator-label">馆员评语</p>
+                    <p id="draftCurator"></p>
+                  </aside>
+                </article>
+
+                <div class="draft-actions">
+                  <button
+                    id="keepDraftButton"
+                    class="primary-button"
+                    type="button"
+                  >
+                    就这样收藏
+                  </button>
+                  <button
+                    id="adjustStyleButton"
+                    class="secondary-button"
+                    type="button"
+                  >
+                    调整风格
+                  </button>
+                  <button
+                    id="customStyleButton"
+                    class="text-button"
+                    type="button"
+                  >
+                    自定义风格
+                  </button>
+                </div>
+              </section>
+
+              <section id="styleScreen" class="app-screen" hidden>
+                <div class="screen-intro compact">
+                  <p class="section-kicker">调整正文</p>
+                  <h2>换一种表达，不改事实。</h2>
+                  <p>来源和馆员评语不会跟着正文风格一起变化。</p>
+                </div>
+
+                <div class="style-list" role="list">
+                  <button
+                    class="style-option"
+                    type="button"
+                    data-style="truthful"
+                  >
+                    <span>自然写实</span>
+                    <small>贴近原话，只把语序和节奏理顺</small>
+                  </button>
+                  <button
+                    class="style-option"
+                    type="button"
+                    data-style="private_label"
+                  >
+                    <span>私人藏品标签</span>
+                    <small>像一则简短、克制的私人收藏说明</small>
+                  </button>
+                  <button
+                    class="style-option"
+                    type="button"
+                    data-style="light_poetic"
+                  >
+                    <span>轻微诗意</span>
+                    <small>保留事实，只增加一个有限的意象</small>
+                  </button>
+                  <button
+                    class="style-option"
+                    type="button"
+                    data-style="dry_humor"
+                  >
+                    <span>克制幽默</span>
+                    <small>用事实里的反差带出一点笑意</small>
+                  </button>
+                  <button
+                    class="style-option"
+                    type="button"
+                    data-style="fantasy_archive"
+                  >
+                    <span>幻想档案</span>
+                    <small>用很轻的档案语气保存真实经历</small>
+                  </button>
+                </div>
+
+                <button
+                  id="openCustomStyleButton"
+                  class="secondary-button"
+                  type="button"
+                >
+                  写下自己的风格
+                </button>
+              </section>
+
+              <section id="customStyleScreen" class="app-screen" hidden>
+                <div class="screen-intro compact">
+                  <p class="section-kicker">自定义风格</p>
+                  <h2>你想让这段正文怎么写？</h2>
+                  <p>可以说语气、长度、结构，也可以说你喜欢的创作者特点。</p>
+                </div>
+
+                <form id="customStyleForm" class="memory-form">
+                  <div class="field-block">
+                    <label for="customStyleInput">你的要求</label>
+                    <textarea
+                      id="customStyleInput"
+                      rows="6"
+                      maxlength="500"
+                      placeholder="比如：写成三句话，像我平时发朋友圈，别太抒情。"
+                    ></textarea>
+                    <p class="field-help">只学习高层特点，不复制任何人的原句。</p>
+                  </div>
+                  <button class="primary-button" type="submit">应用风格</button>
+                </form>
+              </section>
+
+              <section id="finalScreen" class="app-screen" hidden>
+                <div class="final-mark" aria-hidden="true">存</div>
+                <div class="screen-intro final-intro">
+                  <p class="section-kicker">文字已定稿</p>
+                  <h2 id="finalTitle"></h2>
+                  <p>当前验证版不会上传保存。你可以继续查看这版文字，或记录新的记忆。</p>
+                </div>
+
+                <article class="memory-text final-copy">
+                  <p id="finalSource" class="memory-source"></p>
+                  <div id="finalStory" class="memory-story"></div>
+                  <aside class="curator-note">
+                    <p class="curator-label">馆员评语</p>
+                    <p id="finalCurator"></p>
+                  </aside>
+                </article>
+
+                <button
+                  id="newMemoryButton"
+                  class="primary-button"
+                  type="button"
+                >
+                  记录新的记忆
+                </button>
+              </section>
+            </div>
+          </div>
+
+          <div class="home-indicator" aria-hidden="true"></div>
+        </div>
+      </section>
+    </main>
+    <script src="/app.js" type="module"></script>
+  </body>
+</html>
