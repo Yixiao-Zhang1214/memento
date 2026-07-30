@@ -8,10 +8,14 @@
     "start": "node --env-file=.env src/server.js",
     "start:mock": "MEMENTO_MOCK_MODE=true node src/server.js",
     "dev:mock": "MEMENTO_MOCK_MODE=true node --watch src/server.js",
+    "build": "node scripts/build-sites.mjs",
     "test": "node --test",
-    "check": "node --check src/server.js && node --check public/app.js && node --test"
+    "check": "node --check src/server.js && node --check src/sites-worker.js && node --check public/app.js && node --test"
   },
   "engines": {
     "node": ">=20.12"
+  },
+  "devDependencies": {
+    "esbuild": "^0.25.8"
   }
 }
